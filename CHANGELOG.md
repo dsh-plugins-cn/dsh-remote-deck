@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.1.3] - 2026-11-05
+
+### Added
+
+- **下载** button directly in the right-pane file preview toolbar
+  (`sidebar.right.tab.document.actions`) and on the unsupported-preview empty state
+  (`sidebar.right.tab.document.unpreviewable`). It resolves the previewed file's Host path through
+  the session's remote workspace and streams it through the existing download endpoint.
+
+Client-only change; no Host restart required.
+
 ## [1.1.2] - 2026-11-05
 
 ### Changed

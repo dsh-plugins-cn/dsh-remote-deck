@@ -172,6 +172,7 @@ window.__ModuleLoader__.load({
       chev: '<path d="M6 9l6 6 6-6"/>',
       x: '<path d="M6 6l12 12M18 6L6 18"/>',
       folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+      download: '<path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/>',
       file: '<path d="M6 2h7l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M13 2v6h6"/>',
       term: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/>',
       refresh: '<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>',
@@ -381,6 +382,10 @@ window.__ModuleLoader__.load({
       .rd-pill-restore { border:1px solid rgba(29,111,196,.35);background:rgba(29,111,196,.08);color:#1d6fc4;border-radius:999px;font-size:11px;padding:2px 8px;margin-left:6px;cursor:pointer;line-height:1.5 }
       .rd-pill-restore:hover { background:rgba(29,111,196,.16) }
       [data-rd-theme="dark"] .rd-pill-restore { border-color:rgba(124,196,255,.4);background:rgba(124,196,255,.12);color:#7cc4ff }
+
+      .rd-dl { display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.14));border-radius:6px;background:transparent;color:inherit;font-size:12px;cursor:pointer }
+      .rd-dl:hover { background:rgba(15,23,42,.06) }
+      [data-rd-theme="dark"] .rd-dl:hover { background:rgba(255,255,255,.08) }
 
       /* ---- dialogs ---- */
       .rd-overlay { position:fixed;inset:0;background:rgba(17,24,39,.32);z-index:1200;display:flex;align-items:center;justify-content:center }
@@ -2277,6 +2282,30 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // ---------------------------------------------------------------- preview download
+
+    function PreviewDownloadAction(props) {
+      const remote = useRemote(props.sessionId)
+      if (!remote || !props.absolutePath) return null
+      const target = String(props.absolutePath)
+      const info = boot()
+      if (info === null) return null
+      const download = () => {
+        const anchor = document.createElement('a')
+        anchor.href = apiBase() + '/connections/' + remote.connectionId + '/download?path=' + encodeURIComponent(target) + '&token=' + encodeURIComponent(info.token)
+        anchor.download = target.split('/').pop() || 'download'
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+      }
+      return h('button', {
+        type: 'button',
+        className: 'rd-dl',
+        title: '下载到本机：' + target,
+        onClick: download,
+      }, h(Icon, { name: 'download', size: 13 }), h('span', null, '下载'))
+    }
+
     // ---------------------------------------------------------------- draft guard
 
     const draftGuard = { text: '', at: 0 }
@@ -2457,6 +2486,12 @@ window.__ModuleLoader__.load({
       ))
       offs.push(ctx.slots.inject('sidebar.panellist', () =>
         ctx.slots.register({ name: 'sidebar.panellist', id: 'remote-deck', order: 5, label: '远程开发' }, ConsoleIcon),
+      ))
+      offs.push(ctx.slots.inject('sidebar.right.tab.document.actions', () =>
+        ctx.slots.register({ name: 'sidebar.right.tab.document.actions', id: 'remote-deck-download', order: 20 }, PreviewDownloadAction),
+      ))
+      offs.push(ctx.slots.inject('sidebar.right.tab.document.unpreviewable', () =>
+        ctx.slots.register({ name: 'sidebar.right.tab.document.unpreviewable', id: 'remote-deck-download', order: 20 }, PreviewDownloadAction),
       ))
       offs.push(ctx.slots.inject('main', () =>
         ctx.slots.register({ name: 'main', key: 'remote-deck' }, Console),
