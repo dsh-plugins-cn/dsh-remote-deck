@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.0.5] - 2026-11-05
+
+### Added
+
+- `ssh2SelfTest()` runs once per plugin instance, logs the result in debug mode and exposes
+  `diagnostics` (pid, ssh2 status, timestamp) through `/state`, so a broken runtime loader is
+  visible before a session run fails.
+
+### Tests
+
+- `test/ssh2-loader.test.mjs` verifies both `require()` and the self-test can construct the bundled
+  ssh2 Client.
+
 ## [1.0.4] - 2026-11-05
 
 ### Fixed

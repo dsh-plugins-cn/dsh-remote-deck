@@ -13,7 +13,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createApi } from './lib/api.js'
-import { ConnectionStore, RemoteHost, Secrets } from './lib/connection.js'
+import { ConnectionStore, RemoteHost, Secrets, ssh2SelfTest } from './lib/connection.js'
 import { ForwardManager } from './lib/forwards.js'
 import { Routing } from './lib/routing.js'
 import { readSshConfig } from './lib/ssh-config.js'
@@ -27,7 +27,16 @@ const DATA_DIR = join(DSH_HOME, 'remote-deck')
 const LEGACY_DIR = join(DSH_HOME, 'remote-ssh')
 const WORKSPACE_ROOT = join(DATA_DIR, 'workspaces')
 const LEGACY_WORKSPACE_ROOT = join(LEGACY_DIR, 'workspaces')
-const BUILD = '1.0.4'
+const BUILD = '1.0.5'
+const diagnostics = { pid: process.pid, ssh2: 'pending', ssh2Error: '', checkedAt: 0 }
+void ssh2SelfTest().then((result) => {
+  diagnostics.ssh2 = result.ok ? 'ok' : 'failed'
+  diagnostics.ssh2Error = result.ok ? '' : result.error
+  diagnostics.checkedAt = Date.now()
+  if (process.env.DSH_REMOTE_DECK_DEBUG === '1') {
+    console.error('[remote-deck] ssh2 self-test', JSON.stringify(diagnostics))
+  }
+})
 const SHELL_TIMEOUT_MS = 120000
 
 /** Services the plugin needs; web server and credentials store stay optional. */
@@ -210,6 +219,7 @@ export function apply(ctx) {
     routing,
     getRegistry: () => ctx.get('workspaceRegistry'),
     build: BUILD,
+    diagnostics,
     dataDir: DATA_DIR,
     readSshConfig,
     testConnection,
