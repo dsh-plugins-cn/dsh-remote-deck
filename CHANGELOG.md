@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.0.4] - 2026-11-05
+
+### Fixed
+
+- Load the vendored ssh2 build with `createRequire` and validate the `Client` constructor. DSH runs
+  the plugin in several loader instances (UI host, session runner, asset server); the ESM/CJS
+  interop of dynamic `import()` differed there and produced
+  `ssh2.Client is not a constructor` when a session run or image preview opened a new connection.
+  This restores remote session runs and image previews.
+
 ## [1.0.3] - 2026-11-05
 
 ### Fixed
