@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.1.1] - 2026-11-05
+
+### Added
+
+- Session header **恢复** button: the client keeps the last submitted composer text in memory
+  (30 minutes, never written to disk) and can put it back into the composer after a failed or
+  interrupted run. This softens DSH's behaviour of clearing the composer and not persisting the
+  failed turn.
+
 ## [1.1.0] - 2026-11-05
 
 ### Added

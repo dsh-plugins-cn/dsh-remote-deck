@@ -378,6 +378,10 @@ window.__ModuleLoader__.load({
       [data-rd-theme="dark"] .rd-fnotice { background:rgba(99,182,255,.14);color:#8ecbff }
       [data-rd-theme="dark"] .rd-fsearch { background:#12161b;border-color:rgba(255,255,255,.14) }
 
+      .rd-pill-restore { border:1px solid rgba(29,111,196,.35);background:rgba(29,111,196,.08);color:#1d6fc4;border-radius:999px;font-size:11px;padding:2px 8px;margin-left:6px;cursor:pointer;line-height:1.5 }
+      .rd-pill-restore:hover { background:rgba(29,111,196,.16) }
+      [data-rd-theme="dark"] .rd-pill-restore { border-color:rgba(124,196,255,.4);background:rgba(124,196,255,.12);color:#7cc4ff }
+
       /* ---- dialogs ---- */
       .rd-overlay { position:fixed;inset:0;background:rgba(17,24,39,.32);z-index:1200;display:flex;align-items:center;justify-content:center }
       .rd-modal { background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2329);border-radius:16px;box-shadow:0 30px 80px rgba(15,23,42,.3);display:flex;flex-direction:column;overflow:hidden }
@@ -2246,8 +2250,69 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // ---------------------------------------------------------------- draft guard
+
+    const draftGuard = { text: '', at: 0 }
+    const draftSubs = new Set()
+
+    function notifyDraft() {
+      for (const handler of draftSubs) handler()
+    }
+
+    function restoreDraft() {
+      const composer = document.querySelector('[contenteditable="true"]')
+      if (!composer || draftGuard.text.length === 0) return false
+      composer.focus()
+      const selection = window.getSelection()
+      if (selection !== null) {
+        const range = document.createRange()
+        range.selectNodeContents(composer)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+      document.execCommand('insertText', false, draftGuard.text)
+      return true
+    }
+
+    function installDraftGuard() {
+      if (typeof document === 'undefined' || window.__rdDraftInstalled === true) return
+      window.__rdDraftInstalled = true
+      const isComposer = (node) => node instanceof HTMLElement && node.isContentEditable && node.getBoundingClientRect().width > 200
+      const remember = (node) => {
+        const value = (node.innerText || '').trim()
+        if (value.length === 0) return
+        draftGuard.text = value
+        draftGuard.at = Date.now()
+        notifyDraft()
+      }
+      document.addEventListener('input', (event) => {
+        if (isComposer(event.target)) draftGuard.text = (event.target.innerText || '').trim()
+      }, true)
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' || event.shiftKey || !isComposer(event.target)) return
+        remember(event.target)
+      }, true)
+      document.addEventListener('click', (event) => {
+        const button = event.target && event.target.closest ? event.target.closest('button') : null
+        if (button === null) return
+        const composer = document.querySelector('[contenteditable="true"]')
+        if (composer === null) return
+        const label = (button.getAttribute('aria-label') || button.getAttribute('title') || '').toLowerCase()
+        const rect = button.getBoundingClientRect()
+        const box = composer.getBoundingClientRect()
+        const near = rect.y >= box.y - 30 && rect.y <= box.bottom + 30 && rect.x >= box.right - 120
+        if (/发送|send/.test(label) || near) remember(composer)
+      }, true)
+    }
+
     function HeaderPill({ sessionId }) {
       const remote = useRemote(sessionId)
+      const [draft, setDraft] = React.useState(draftGuard.text)
+      React.useEffect(() => {
+        const handler = () => setDraft(draftGuard.text)
+        draftSubs.add(handler)
+        return () => { draftSubs.delete(handler) }
+      }, [])
       if (!remote) return null
       const host = (store.state && store.state.connections || []).find((row) => row.id === remote.connectionId)
       const status = host ? host.status : 'disconnected'
@@ -2259,6 +2324,13 @@ window.__ModuleLoader__.load({
         h(Icon, { name: 'server', size: 12 }),
         h('span', null, remote.host + ' · ' + (remote.folder || remote.title)),
         h(Icon, { name: 'chev', size: 11 }),
+        draft && Date.now() - draftGuard.at < 30 * 60 * 1000
+          ? h('button', {
+            className: 'rd-pill-restore',
+            title: '把上一次发送的内容填回输入框',
+            onClick: (event) => { event.stopPropagation(); restoreDraft() },
+          }, '恢复')
+          : null,
       )
     }
 
@@ -2267,6 +2339,7 @@ window.__ModuleLoader__.load({
     function apply(ctx) {
       ctxRef = ctx
       ensureStyle()
+      installDraftGuard()
       try {
         // Development affordances for the screenshot harness; removed in v0.9.0.
         window.__RD_STORE__ = store
@@ -2276,6 +2349,13 @@ window.__ModuleLoader__.load({
         }
         window.__RD_OPEN_CONSOLE__ = () => openConsole()
         window.__RD_CTX__ = ctx
+        window.__RD_DRAFT__ = draftGuard
+        window.__RD_SET_DRAFT__ = (value) => {
+          draftGuard.text = String(value || '')
+          draftGuard.at = Date.now()
+          notifyDraft()
+        }
+        window.__RD_RESTORE_DRAFT__ = restoreDraft
       } catch {
         /* not a page context */
       }
