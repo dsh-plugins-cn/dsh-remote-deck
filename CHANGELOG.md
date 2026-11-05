@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.1.5] - 2026-11-05
+
+### Added
+
+- Download icon on delivered file cards and change-review file cards
+  (`deliverables.file.actions` / `deliverables.review.file.actions`). The slot does not receive the
+  path directly, so the control resolves it from the card's own absolute-path title (or its
+  aria-label) and maps the session stub to the remote workspace root.
+
 ## [1.1.4] - 2026-11-05
 
 ### Changed

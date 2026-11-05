@@ -383,6 +383,7 @@ window.__ModuleLoader__.load({
       .rd-pill-restore:hover { background:rgba(29,111,196,.16) }
       [data-rd-theme="dark"] .rd-pill-restore { border-color:rgba(124,196,255,.4);background:rgba(124,196,255,.12);color:#7cc4ff }
 
+      .rd-dl-wrap { display:inline-flex;margin-left:4px }
       .rd-dl { display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.14));border-radius:6px;background:transparent;color:inherit;cursor:pointer }
       .rd-dl:hover { background:rgba(15,23,42,.06) }
       [data-rd-theme="dark"] .rd-dl:hover { background:rgba(255,255,255,.08) }
@@ -2307,6 +2308,48 @@ window.__ModuleLoader__.load({
       }, h(Icon, { name: 'download', size: 14 }))
     }
 
+    function DeliverableDownloadAction(props) {
+      const remote = useRemote(props.sessionId)
+      const wrapRef = React.useRef(null)
+      if (!remote) return null
+      const resolveTarget = () => {
+        const card = wrapRef.current && wrapRef.current.closest ? wrapRef.current.closest('[data-presented-file]') : null
+        if (card === null) return ''
+        const button = card.querySelector('button[title]')
+        const title = button === null ? '' : button.getAttribute('title') || ''
+        if (title.startsWith('/')) return title
+        const stub = remote.stub || ''
+        if (stub.length > 0 && (title === stub || title.startsWith(stub + '\\') || title.startsWith(stub + '/'))) {
+          const rest = title.slice(stub.length).replace(/\\/g, '/')
+          return (remote.path || '').replace(/\/$/, '') + rest
+        }
+        const label = button === null ? '' : button.getAttribute('aria-label') || ''
+        const match = label.match(/\/[^\s"']+/)
+        return match === null ? '' : match[0]
+      }
+      const download = () => {
+        const target = resolveTarget()
+        if (target.length === 0) return
+        const info = boot()
+        if (info === null) return
+        const anchorEl = document.createElement('a')
+        anchorEl.href = apiBase() + '/connections/' + remote.connectionId + '/download?path=' + encodeURIComponent(target) + '&token=' + encodeURIComponent(info.token)
+        anchorEl.download = target.split('/').pop() || 'download'
+        document.body.appendChild(anchorEl)
+        anchorEl.click()
+        anchorEl.remove()
+      }
+      return h('span', { ref: wrapRef, className: 'rd-dl-wrap' },
+        h('button', {
+          type: 'button',
+          className: 'rd-dl',
+          title: '下载到本机',
+          'aria-label': '下载到本机',
+          onClick: download,
+        }, h(Icon, { name: 'download', size: 14 })),
+      )
+    }
+
     // ---------------------------------------------------------------- draft guard
 
     const draftGuard = { text: '', at: 0 }
@@ -2487,6 +2530,12 @@ window.__ModuleLoader__.load({
       ))
       offs.push(ctx.slots.inject('sidebar.panellist', () =>
         ctx.slots.register({ name: 'sidebar.panellist', id: 'remote-deck', order: 5, label: '远程开发' }, ConsoleIcon),
+      ))
+      offs.push(ctx.slots.inject('deliverables.file.actions', () =>
+        ctx.slots.register({ name: 'deliverables.file.actions', id: 'remote-deck-download', order: 20 }, DeliverableDownloadAction),
+      ))
+      offs.push(ctx.slots.inject('deliverables.review.file.actions', () =>
+        ctx.slots.register({ name: 'deliverables.review.file.actions', id: 'remote-deck-download', order: 20 }, DeliverableDownloadAction),
       ))
       offs.push(ctx.slots.inject('sidebar.right.tab.document.actions', () =>
         ctx.slots.register({ name: 'sidebar.right.tab.document.actions', id: 'remote-deck-download', order: 20 }, PreviewDownloadAction),
