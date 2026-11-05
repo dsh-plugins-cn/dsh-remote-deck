@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.1.7] - 2026-11-05
+
+### Fixed
+
+- Downloading a file that was generated on the **local** machine (for example under
+  `DSH_HOME\tmp`) no longer goes through SFTP. The preview and delivery-card actions now pick a
+  local download route for Windows paths; it streams only files under `DSH_HOME`, and the remote
+  endpoint rejects non-POSIX paths with a clear 400 instead of an SFTP `FS_NOT_FOUND`.
+
 ## [1.1.6] - 2026-11-05
 
 ### Changed

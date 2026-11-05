@@ -1356,6 +1356,26 @@ window.__ModuleLoader__.load({
       return info === null ? '' : 'http://127.0.0.1:' + info.port
     }
 
+    function isRemotePosix(value) {
+      return typeof value === 'string' && value.startsWith('/')
+    }
+
+    function isLocalAbsolute(value) {
+      return typeof value === 'string' && (/^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\'))
+    }
+
+    function downloadUrlFor(connectionId, target) {
+      const info = boot()
+      if (info === null) return ''
+      if (isRemotePosix(target)) {
+        return apiBase() + '/connections/' + connectionId + '/download?path=' + encodeURIComponent(target) + '&token=' + encodeURIComponent(info.token)
+      }
+      if (isLocalAbsolute(target)) {
+        return apiBase() + '/local/download?path=' + encodeURIComponent(target) + '&token=' + encodeURIComponent(info.token)
+      }
+      return ''
+    }
+
     function assetUrl(name) {
       const info = boot()
       return info === null ? '' : apiBase() + '/assets/' + name + '?token=' + encodeURIComponent(info.token)
@@ -2293,8 +2313,10 @@ window.__ModuleLoader__.load({
       const info = boot()
       if (info === null) return null
       const download = () => {
+        const href = downloadUrlFor(remote.connectionId, target)
+        if (href.length === 0) return
         const anchor = document.createElement('a')
-        anchor.href = apiBase() + '/connections/' + remote.connectionId + '/download?path=' + encodeURIComponent(target) + '&token=' + encodeURIComponent(info.token)
+        anchor.href = href
         anchor.download = target.split('/').pop() || 'download'
         document.body.appendChild(anchor)
         anchor.click()
@@ -2324,6 +2346,7 @@ window.__ModuleLoader__.load({
           const rest = title.slice(stub.length).replace(/\\/g, '/')
           return (remote.path || '').replace(/\/$/, '') + rest
         }
+        if (isLocalAbsolute(title)) return title
         const label = button === null ? '' : button.getAttribute('aria-label') || ''
         const match = label.match(/\/[^\s"']+/)
         return match === null ? '' : match[0]
@@ -2333,8 +2356,10 @@ window.__ModuleLoader__.load({
         if (target.length === 0) return
         const info = boot()
         if (info === null) return
+        const href = downloadUrlFor(remote.connectionId, target)
+        if (href.length === 0) return
         const anchorEl = document.createElement('a')
-        anchorEl.href = apiBase() + '/connections/' + remote.connectionId + '/download?path=' + encodeURIComponent(target) + '&token=' + encodeURIComponent(info.token)
+        anchorEl.href = href
         anchorEl.download = target.split('/').pop() || 'download'
         document.body.appendChild(anchorEl)
         anchorEl.click()
