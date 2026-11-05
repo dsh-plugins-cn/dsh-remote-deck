@@ -383,7 +383,7 @@ window.__ModuleLoader__.load({
       .rd-pill-restore:hover { background:rgba(29,111,196,.16) }
       [data-rd-theme="dark"] .rd-pill-restore { border-color:rgba(124,196,255,.4);background:rgba(124,196,255,.12);color:#7cc4ff }
 
-      .rd-dl { display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.14));border-radius:6px;background:transparent;color:inherit;font-size:12px;cursor:pointer }
+      .rd-dl { display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.14));border-radius:6px;background:transparent;color:inherit;cursor:pointer }
       .rd-dl:hover { background:rgba(15,23,42,.06) }
       [data-rd-theme="dark"] .rd-dl:hover { background:rgba(255,255,255,.08) }
 
@@ -2302,8 +2302,9 @@ window.__ModuleLoader__.load({
         type: 'button',
         className: 'rd-dl',
         title: '下载到本机：' + target,
+        'aria-label': '下载到本机',
         onClick: download,
-      }, h(Icon, { name: 'download', size: 13 }), h('span', null, '下载'))
+      }, h(Icon, { name: 'download', size: 14 }))
     }
 
     // ---------------------------------------------------------------- draft guard

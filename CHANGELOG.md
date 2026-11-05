@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.1.4] - 2026-11-05
+
+### Changed
+
+- The file-preview download control is now an icon-only 24×24 button (tooltip and aria-label keep the
+  action name), so it no longer wraps in a narrow preview toolbar.
+
 ## [1.1.3] - 2026-11-05
 
 ### Added
