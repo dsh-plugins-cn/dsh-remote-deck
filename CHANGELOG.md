@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.1.2] - 2026-11-05
+
+### Changed
+
+- The quick panel now closes when clicking outside it or pressing Escape, in addition to the
+  close button. Client-only change.
+
 ## [1.1.1] - 2026-11-05
 
 ### Added

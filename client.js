@@ -585,6 +585,33 @@ window.__ModuleLoader__.load({
       const busy = useStore((s) => s.busy)
       const notice = useStore((s) => s.notice)
       const selectedHost = useStore((s) => s.selectedHost)
+      const panelRef = React.useRef(null)
+
+      React.useEffect(() => {
+        if (!open) return undefined
+        const close = () => {
+          if (store.open) {
+            store.open = false
+            emit()
+          }
+        }
+        const onPointer = (event) => {
+          const target = event.target
+          if (!(target instanceof Element)) return
+          if (panelRef.current !== null && panelRef.current.contains(target)) return
+          if (target.closest('.rd-chip')) return
+          close()
+        }
+        const onKey = (event) => {
+          if (event.key === 'Escape') close()
+        }
+        document.addEventListener('mousedown', onPointer, true)
+        document.addEventListener('keydown', onKey, true)
+        return () => {
+          document.removeEventListener('mousedown', onPointer, true)
+          document.removeEventListener('keydown', onKey, true)
+        }
+      }, [open])
 
       if (!open) return null
 
@@ -622,7 +649,7 @@ window.__ModuleLoader__.load({
         if (ui) ui.openWorkspace(item.workspaceId)
       }
 
-      return h('div', { className: 'rd-panel' },
+      return h('div', { className: 'rd-panel', ref: panelRef },
         h('div', { className: 'rd-head' },
           h('div', null,
             h('div', { className: 't' }, '远程开发'),
