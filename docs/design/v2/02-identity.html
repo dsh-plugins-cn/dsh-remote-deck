@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>02 · 会话与工作区标识</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  .chat2 { width: 700px; margin: 0 0 0 26px; padding: 26px 0 0; }
+  .chat2 .msg-user { max-width: 480px; }
+  .legendcard {
+    position: absolute; right: 22px; top: 286px; width: 272px; background: #fff;
+    border: 1px solid var(--border); border-radius: 12px; padding: 13px 14px;
+    box-shadow: 0 8px 24px rgba(16, 24, 40, .07);
+  }
+  .legendcard .lh { font-size: 11.5px; font-weight: 700; letter-spacing: .02em; }
+  .legendcard .ls { font-size: 10px; color: var(--text-3); margin-top: 3px; line-height: 1.6; }
+  .legendcard .li { display: flex; gap: 8px; margin-top: 11px; }
+  .legendcard .li .num, .dotno { width: 17px; height: 17px; border-radius: 50%; background: #1f2329; color: #fff; font-size: 9.5px; font-weight: 700; display: grid; place-items: center; flex: none; }
+  .legendcard .li .num { margin-top: 1px; }
+  .legendcard .li .lb { font-size: 10.5px; line-height: 1.6; color: var(--text-2); }
+  .legendcard .li .lb b { color: var(--text); font-weight: 600; display: block; margin-bottom: 1px; }
+  .dotno { position: fixed; z-index: 45; box-shadow: 0 0 0 3px rgba(255,255,255,.92); }
+  .session.hovered { background: #eceef2; }
+</style>
+</head>
+<body data-active="ssh-pool" data-connected="dev-box">
+<div class="shell">
+  <aside class="sidebar" id="side"></aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="back"><svg class="i sm"><use href="#i-arrowleft"/></svg></span>
+      <span class="title">重构 SSH 连接池</span>
+      <span class="right">
+        <span class="pill machine" id="hostPill" style="height:26px"><span class="hdot ok"></span><svg class="i xs"><use href="#i-server"/></svg>dev-box · demo-app<svg class="i xs"><use href="#i-chevdown"/></svg></span>
+        <span class="iconbtn"><svg class="i"><use href="#i-more"/></svg></span>
+      </span>
+    </div>
+
+    <div class="content">
+      <div class="chat2">
+        <div class="msg-user">把 `src/pool.ts` 里的握手逻辑改成复用，改完跑一下测试。</div>
+        <div class="msg-assistant">
+          <span class="avatar">DS</span>
+          <div class="msg-body">
+            已改完。`connect()` 现在命中池子就直接复用，握手只发生在没有可用连接时。
+            <div class="toolcard">
+              <div class="th"><svg class="i xs"><use href="#i-term"/></svg>bash · dev-box · /srv/demo-app</div>
+              <div class="tb">$ pnpm vitest run pool<br><span style="color:#2ea043">✓</span> pool.test.ts (6)<br><span style="color:#8f959e">Tests 6 passed · 0.42s</span></div>
+            </div>
+            <div style="margin-top:10px;color:#5f6672;font-size:12px">远端路径：<span style="font-family:var(--mono)">/srv/demo-app/src/pool.ts</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer" id="composerBox" style="left:26px; transform:none; bottom:26px; width:700px">
+        <div class="ctx" id="composerCtx"><svg class="i xs"><use href="#i-folder"/></svg>dev-box · /srv/demo-app<svg class="i xs"><use href="#i-chevdown"/></svg></div>
+        <div class="box">
+          <div class="ph">继续描述你的需求，或 @ 引用远程文件</div>
+          <div class="bar"><span>+</span><span>工作区内修改</span><span class="send"><svg class="i sm"><use href="#i-arrowup"/></svg></span></div>
+        </div>
+      </div>
+
+      <!-- hover card on a session row -->
+      <div class="hovercard" id="hoverCard" style="left:252px; top:430px">
+        <div class="hc-title">修复工作区删除</div>
+        <div class="hc-row"><svg class="i xs"><use href="#i-folder"/></svg>dev-box · demo-app</div>
+        <div class="hc-row"><span class="hdot ok"></span>已连接 · 12ms · Linux 5.14</div>
+        <div class="hc-path">/srv/demo-app</div>
+        <div class="hc-foot"><svg class="i xs"><use href="#i-msg"/></svg>8 条消息 · 2 小时前<span style="margin-left:auto">⋯</span></div>
+      </div>
+
+      <div class="legendcard">
+        <div class="lh">标识体系</div>
+        <div class="ls">远程会话与本地会话一眼可分，不改变 DSH 现有布局。</div>
+        <div class="li"><span class="num">1</span><div class="lb"><b>会话头：机器胶囊</b>主机名 + 工作区名 + 连接状态；点击打开远程控制台。</div></div>
+        <div class="li"><span class="num">2</span><div class="lb"><b>侧栏会话行：机器徽标</b>按机器配色的 16px 徽标；本地会话保持原有状态点。</div></div>
+        <div class="li"><span class="num">3</span><div class="lb"><b>悬停卡：远程信息</b>补一行机器、路径与延迟，不打断阅读。</div></div>
+        <div class="li"><span class="num">4</span><div class="lb"><b>输入框：当前工作区</b>POSIX 路径，点击可切换工作区。</div></div>
+        <div class="li"><span class="num">5</span><div class="lb"><b>工作区标题：统一命名</b>`机器名 · 项目名`，与远程目录一一对应。</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="dotno" data-num="1" data-for="hostPill">1</div>
+<div class="dotno" data-num="2" data-for="hoveredRow">2</div>
+<div class="dotno" data-num="3" data-for="hoverCard">3</div>
+<div class="dotno" data-num="4" data-for="composerCtx">4</div>
+<div class="dotno" data-num="5" data-for="wsTitle">5</div>
+
+<script src="shell.js"></script>
+<script>
+  window.addEventListener('load', () => {
+    const rows = [...document.querySelectorAll('.session')];
+    const target = rows.find((r) => r.textContent.includes('修复工作区删除'));
+    if (target) { target.classList.add('hovered'); target.id = 'hoveredRow'; }
+    const titleRow = [...document.querySelectorAll('.wsrow')].find((r) => r.textContent.includes('demo-app'));
+    const titleText = titleRow ? titleRow.querySelector('.title') : null;
+    if (titleText) titleText.id = 'wsTitle';
+
+    const dots = [...document.querySelectorAll('.dotno')];
+    for (const dot of dots) {
+      const targetEl = document.getElementById(dot.dataset.for);
+      if (!targetEl) continue;
+      const r = targetEl.getBoundingClientRect();
+      let top = r.top + r.height / 2 - 8.5;
+      let left = r.right + 7;
+      if (dot.dataset.for === 'hoverCard') { left = r.right - 27; top = r.top - 8; }
+      if (dot.dataset.for === 'hoveredRow') { left = 278; top = r.top + 2; }
+      if (dot.dataset.for === 'composerCtx') { left = r.right + 8; top = r.top - 4; }
+      dot.style.left = left + 'px';
+      dot.style.top = top + 'px';
+    }
+  });
+</script>
+</body>
+</html>

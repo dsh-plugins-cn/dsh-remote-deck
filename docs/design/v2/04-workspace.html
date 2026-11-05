@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>04 · 新建远程工作区</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  .bgpane { padding: 22px 26px; }
+  .ghost-block { background: #f4f5f7; border-radius: 10px; height: 66px; margin-top: 12px; }
+  .modal2 { width: 1040px; height: 636px; display: flex; flex-direction: column; }
+  .mhead { display: flex; align-items: center; gap: 10px; padding: 16px 20px 12px; border-bottom: 1px solid var(--border-soft); }
+  .mhead .t { font-size: 14px; font-weight: 700; }
+  .mhead .s { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+  .mhead .x { margin-left: auto; color: var(--text-3); width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; }
+  .mbody { flex: 1; display: flex; min-height: 0; }
+  .mcol { flex: 1; min-width: 0; padding: 14px 18px; display: flex; flex-direction: column; }
+  .side2 { width: 312px; flex: none; border-left: 1px solid var(--border); background: #fbfbfc; padding: 14px 16px; display: flex; flex-direction: column; }
+  .pathbar2 { display: flex; align-items: center; gap: 6px; }
+  .pathbar2 .up { width: 30px; height: 32px; border: 1px solid var(--border); border-radius: 8px; display: grid; place-items: center; color: var(--text-2); background: #fff; }
+  .pathbar2 .cr { flex: 1; display: flex; align-items: center; gap: 2px; height: 32px; border: 1px solid #b9d3ee; box-shadow: 0 0 0 3px rgba(29,111,196,.1); border-radius: 8px; padding: 0 8px; font-family: var(--mono); font-size: 11.5px; background: #fff; }
+  .pathbar2 .cr .c { padding: 2px 5px; border-radius: 5px; }
+  .pathbar2 .cr .sep2 { color: #c6ccd4; }
+  .pathbar2 .ic { width: 30px; height: 32px; border: 1px solid var(--border); border-radius: 8px; display: grid; place-items: center; color: var(--text-3); background: #fff; }
+  .filter { display: flex; align-items: center; gap: 6px; margin: 10px 0 8px; color: var(--text-3); font-size: 11.5px; }
+  .filter .fbox { flex: 1; height: 28px; border: 1px solid var(--border); border-radius: 7px; display: flex; align-items: center; gap: 6px; padding: 0 8px; background: #fff; }
+  .ftable { flex: 1; min-height: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+  .ftable .fh2 { display: grid; grid-template-columns: 1fr 84px 96px; gap: 10px; padding: 8px 12px; background: #fafafb; border-bottom: 1px solid var(--border-soft); font-size: 10.5px; color: var(--text-3); }
+  .ftable .rows { overflow: hidden; }
+  .ftable .rows .fr2:last-child { border-bottom: 0; }
+  .fr2 { display: grid; grid-template-columns: 1fr 84px 96px; gap: 10px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--border-soft); font-size: 12px; }
+  .fr2 .nm { display: flex; align-items: center; gap: 8px; }
+  .fr2 .nm svg { color: #c1a06a; }
+  .fr2.sel { background: #eef4fc; box-shadow: inset 2px 0 0 var(--brand); }
+  .fr2.sel .nm svg { color: var(--h-blue); }
+  .fr2 .mut { color: var(--text-3); font-size: 11px; }
+  .mfoot { border-top: 1px solid var(--border-soft); padding: 9px 18px; font-size: 10.5px; color: var(--text-3); display: flex; align-items: center; gap: 8px; }
+  .side2 .lbl { font-size: 10.5px; color: var(--text-3); margin: 12px 0 5px; }
+  .side2 .lbl.first { margin-top: 0; }
+  .side2 .inp { height: 32px; border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 0 9px; font-size: 12px; display: flex; align-items: center; }
+  .side2 .pth { font-family: var(--mono); font-size: 10.5px; color: #4a5260; background: #f1f3f6; border-radius: 7px; padding: 7px 9px; word-break: break-all; }
+  .opt { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0; }
+  .opt .lb { font-size: 11.5px; }
+  .opt .lb small { display: block; color: var(--text-3); font-size: 10px; margin-top: 2px; line-height: 1.5; }
+  .side2 .go2 { margin-top: 12px; height: 34px; border-radius: 9px; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; font-weight: 500; }
+  .side2 .cancel { text-align: center; color: var(--text-3); font-size: 11px; margin-top: 8px; }
+  .divider2 { height: 1px; background: var(--border); margin: 14px 0 10px; }
+  .exist { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--border-soft); font-size: 11px; }
+  .exist .p { font-family: var(--mono); font-size: 10px; color: #4a5260; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .exist .del { margin-left: auto; color: var(--text-4); display: flex; gap: 4px; align-items: center; }
+  .exist.confirm { background: #fff8f7; border-radius: 6px; padding: 6px; }
+  .exist .yes { color: var(--err); font-size: 10px; border: 1px solid #f0cdcd; border-radius: 5px; padding: 1px 5px; }
+  .exist .no { color: var(--text-3); font-size: 10px; }
+</style>
+</head>
+<body data-active="none" data-connected="dev-box">
+<div class="shell">
+  <aside class="sidebar" id="side"></aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="back"><svg class="i sm"><use href="#i-arrowleft"/></svg></span>
+      <span class="title">远程开发</span>
+      <span class="sub">dev-box · 工作区</span>
+      <span class="right">
+        <span class="btn primary"><svg class="i sm"><use href="#i-plus"/></svg>添加机器</span>
+        <span class="iconbtn"><svg class="i"><use href="#i-sliders"/></svg></span>
+      </span>
+    </div>
+    <div class="content">
+      <div class="console">
+        <div class="rail">
+          <div class="rh">已连接</div>
+          <div class="hostitem active">
+            <span class="ico blue"><svg class="i sm"><use href="#i-server"/></svg></span>
+            <div><div class="nm">dev-box</div><div class="meta">dev@203.0.113.10</div></div>
+            <div class="rt"><div class="hdot ok" style="margin-left:auto"></div><div class="lat2">12ms</div></div>
+          </div>
+          <div class="hostitem">
+            <span class="ico violet"><svg class="i sm"><use href="#i-cpu"/></svg></span>
+            <div><div class="nm">gpu-01</div><div class="meta">dev@203.0.113.11</div></div>
+            <div class="rt"><div class="hdot ok" style="margin-left:auto"></div><div class="lat2" style="color:#b07d18">38ms</div></div>
+          </div>
+        </div>
+        <div class="pane bgpane">
+          <div class="h1" style="font-size:16px">工作区</div>
+          <div class="ghost-block" style="width:70%"></div>
+          <div class="ghost-block"></div>
+          <div class="ghost-block" style="width:88%"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="overlay"></div>
+
+<div class="modal modal2">
+  <div class="mhead">
+    <div>
+      <div class="t">新建远程工作区</div>
+      <div class="s">在 dev-box 上选择一个目录，它就会成为 DSH 的一个工作区</div>
+    </div>
+    <span class="x"><svg class="i sm"><use href="#i-x"/></svg></span>
+  </div>
+
+  <div class="mbody">
+    <div class="mcol">
+      <div class="pathbar2">
+        <span class="up"><svg class="i sm"><use href="#i-arrowup"/></svg></span>
+        <span class="cr">
+          <span class="c">/</span><span class="sep2">/</span><span class="c">data</span><span class="sep2">/</span><span class="c">work</span>
+          <span style="margin-left:auto;color:var(--text-4);font-family:var(--sans);font-size:10px">可编辑，回车跳转</span>
+        </span>
+        <span class="ic"><svg class="i sm"><use href="#i-refresh"/></svg></span>
+      </div>
+
+      <div class="filter">
+        <span class="fbox"><svg class="i xs"><use href="#i-search"/></svg>筛选当前目录</span>
+        <span class="pill" style="height:28px"><svg class="i xs"><use href="#i-folder"/></svg>仅目录</span>
+      </div>
+
+      <div class="ftable">
+        <div class="fh2"><span>名称</span><span>修改时间</span><span>类型</span></div>
+        <div class="rows">
+          <div class="fr2"><div class="nm"><svg class="i sm"><use href="#i-folder"/></svg>demo-app</div><span class="mut">12 分钟前</span><span class="mut">目录 · 4 项</span></div>
+          <div class="fr2"><div class="nm"><svg class="i sm"><use href="#i-folder"/></svg>inference-api</div><span class="mut">昨天</span><span class="mut">目录 · 2 项</span></div>
+          <div class="fr2"><div class="nm"><svg class="i sm"><use href="#i-folder"/></svg>data-pipeline</div><span class="mut">3 天前</span><span class="mut">目录 · 3 项</span></div>
+          <div class="fr2 sel"><div class="nm"><svg class="i sm"><use href="#i-folder"/></svg>feature-queue</div><span class="mut">刚刚</span><span class="mut">目录</span></div>
+          <div class="fr2"><div class="nm"><svg class="i sm"><use href="#i-folder"/></svg>legacy-monolith</div><span class="mut">2026-10-02</span><span class="mut">目录 · 12 项</span></div>
+          <div class="fr2"><div class="nm"><svg class="i sm"><use href="#i-folder"/></svg>ops-scripts</div><span class="mut">2026-09-28</span><span class="mut">目录 · 6 项</span></div>
+          <div class="fr2"><div class="nm"><svg class="i sm"><use href="#i-folder"/></svg>sandbox</div><span class="mut">2026-09-12</span><span class="mut">目录 · 1 项</span></div>
+          <div class="fr2"><div class="nm"><svg class="i sm"><use href="#i-folder"/></svg>reports</div><span class="mut">2026-08-30</span><span class="mut">目录 · 2 项</span></div>
+          <div class="fr2"><div class="nm"><svg class="i sm"><use href="#i-folder"/></svg>archive-2025</div><span class="mut">2025-12-31</span><span class="mut">目录 · 40 项</span></div>
+          <div class="fr2"><div class="nm"><svg class="i sm"><use href="#i-folder"/></svg>.git</div><span class="mut">今天</span><span class="mut">目录</span></div>
+        </div>
+      </div>
+
+      <div class="mfoot">
+        <span>只显示目录 · 共 10 项 · 双击名称可直接添加</span>
+        <span style="margin-left:auto" class="pill"><svg class="i xs"><use href="#i-plus"/></svg>在此新建文件夹</span>
+      </div>
+    </div>
+
+    <div class="side2">
+      <div class="lbl first">将添加为工作区</div>
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
+        <span class="hostmark blue"><svg class="i"><use href="#i-server"/></svg></span>
+        <span style="font-size:11.5px;font-weight:600">dev-box</span>
+        <span class="hdot ok"></span><span style="font-size:10px;color:#4c8f5c;font-family:var(--mono)">12ms</span>
+      </div>
+
+      <div class="lbl">侧栏显示名称</div>
+      <div class="inp">dev-box · feature-queue</div>
+      <div class="lbl">远程路径</div>
+      <div class="pth">/srv/feature-queue</div>
+
+      <div style="margin-top:12px">
+        <div class="opt">
+          <span class="switch on"></span>
+          <div class="lb">写入 AGENTS.md<small>告诉模型这里在远程机器上，路径用 POSIX</small></div>
+        </div>
+        <div class="opt">
+          <span class="switch on"></span>
+          <div class="lb">创建后打开新会话<small>直接进入该工作区的对话</small></div>
+        </div>
+      </div>
+
+      <div class="go2"><svg class="i sm"><use href="#i-plus"/></svg>添加工作区</div>
+      <div class="cancel">取消</div>
+
+      <div class="divider2"></div>
+      <div class="lbl">已在 dev-box 的工作区 · 3</div>
+      <div class="exist"><span class="hdot ok"></span><span class="p">demo-app</span><span class="del"><svg class="i xs"><use href="#i-trash"/></svg></span></div>
+      <div class="exist"><span class="hdot idle"></span><span class="p">inference-api</span><span class="del"><svg class="i xs"><use href="#i-trash"/></svg></span></div>
+      <div class="exist confirm"><span class="hdot idle"></span><span class="p" style="color:var(--err)">data-pipeline</span><span class="del"><span class="yes">确认移除</span><span class="no">取消</span></span></div>
+      <div style="font-size:9.5px;color:var(--text-4);margin-top:8px;line-height:1.6">移除工作区只从 DSH 侧栏摘除，机器上的目录不会被删除。</div>
+    </div>
+  </div>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>

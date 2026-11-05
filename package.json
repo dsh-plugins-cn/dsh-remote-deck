@@ -1,0 +1,64 @@
+{
+  "name": "dsh-remote-deck",
+  "version": "1.0.2",
+  "private": false,
+  "type": "module",
+  "description": "Remote Deck: SSH workspaces for DeepSeek Harness. Connect any number of machines, browse remote folders, and run DSH sessions with the remote filesystem, shell, search, terminal and port forwarding.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "ssh",
+    "remote",
+    "remote-development",
+    "workspace",
+    "terminal"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "lib/*.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "vendor/xterm/*",
+    "vendor/node_modules/**",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "node --check index.js && node --check client.js && node scripts/check-manifest.mjs",
+    "test": "node --test",
+    "pack:dry": "npm pack --dry-run"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dsh-plugins-cn/dsh-remote-deck.git"
+  },
+  "homepage": "https://github.com/dsh-plugins-cn/dsh-remote-deck#readme",
+  "bugs": {
+    "url": "https://github.com/dsh-plugins-cn/dsh-remote-deck/issues"
+  }
+}

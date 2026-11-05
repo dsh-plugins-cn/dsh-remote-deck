@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest an improvement for Remote Deck
+labels: [enhancement]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Remote Deck version
+      placeholder: "1.0.0"
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is painful or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How should it behave? Sketches or screenshots welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      description: Remote Deck keeps the conversation as the main surface and does not run an agent on the server.
+      options:
+        - label: This keeps the chat as the main surface and does not require installing anything on the remote host.
+          required: true

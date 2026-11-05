@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>dsh-remote-deck v2 设计稿</title>
+<style>
+  :root { --line:#e8e8ec; --text:#1f2329; --muted:#8f959e; --brand:#1d6fc4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; color: var(--text); background: #f5f6f8; }
+  header { padding: 34px 40px 10px; }
+  h1 { margin: 0; font-size: 22px; letter-spacing: -.3px; }
+  header p { margin: 8px 0 0; color: #5f6672; font-size: 13px; line-height: 1.7; }
+  header .links { margin-top: 12px; font-size: 12px; }
+  header .links a { color: var(--brand); margin-right: 14px; text-decoration: none; }
+  .grid { padding: 22px 40px 60px; display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 6px 20px rgba(16,24,40,.05); }
+  .card img { display: block; width: 100%; border-bottom: 1px solid var(--line); }
+  .card .cap { padding: 11px 14px; display: flex; align-items: baseline; gap: 8px; }
+  .card .cap b { font-size: 13px; }
+  .card .cap span { font-size: 11.5px; color: var(--muted); }
+  .card .cap a { margin-left: auto; font-size: 11.5px; color: var(--brand); text-decoration: none; }
+  footer { padding: 0 40px 50px; color: var(--muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>dsh-remote-deck v2 · 设计稿</h1>
+  <p>目标是：一个 DSH 窗口里，远程机器像本地一样可读、可切换、可管理。点任意一张可打开交互版 HTML。</p>
+  <div class="links"><a href="spec.md">需求与设计说明（spec.md）</a><a href="01-quick-panel.html">快速面板</a><a href="02-identity.html">会话标识</a><a href="03-console.html">远程控制台</a><a href="04-workspace.html">新建工作区</a><a href="05-add-host.html">添加机器</a><a href="06-terminal-ports.html">终端与端口</a></div>
+</header>
+<div class="grid">
+  <div class="card"><a href="01-quick-panel.html"><img src="01.png" alt="快速面板"></a><div class="cap"><b>01 快速面板</b><span>胶囊 → 机器切换 / 最近工作区 / 快捷操作</span><a href="01-quick-panel.html">打开</a></div></div>
+  <div class="card"><a href="02-identity.html"><img src="02.png" alt="会话与工作区标识"></a><div class="cap"><b>02 会话与工作区标识</b><span>头部胶囊 / 行徽标 / 悬停卡 / 输入框工作区</span><a href="02-identity.html">打开</a></div></div>
+  <div class="card"><a href="03-console.html"><img src="03.png" alt="远程控制台"></a><div class="cap"><b>03 远程控制台 · 概览</b><span>机器清单 / 指标 / 工作区 / 最近会话 / 端口</span><a href="03-console.html">打开</a></div></div>
+  <div class="card"><a href="04-workspace.html"><img src="04.png" alt="新建远程工作区"></a><div class="cap"><b>04 新建远程工作区</b><span>面包屑浏览 / 预览 / 已有工作区移除</span><a href="04-workspace.html">打开</a></div></div>
+  <div class="card"><a href="05-add-host.html"><img src="05.png" alt="添加机器"></a><div class="cap"><b>05 添加机器</b><span>SSH config 导入 / 手动配置 / 测试连接</span><a href="05-add-host.html">打开</a></div></div>
+  <div class="card"><a href="06-terminal-ports.html"><img src="06.png" alt="终端与端口转发"></a><div class="cap"><b>06 终端与端口转发</b><span>远程 PTY / 自动发现端口 / 转发列表</span><a href="06-terminal-ports.html">打开</a></div></div>
+</div>
+<footer>状态：待确认 · 确认后按 P0 → P1 顺序实现，并逐屏对照验收。</footer>
+</body>
+</html>

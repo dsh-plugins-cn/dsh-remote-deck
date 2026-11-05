@@ -1,0 +1,145 @@
+# Remote Deck · 远程工作台
+
+**给 DeepSeek Harness 的 SSH 工作区插件：一个窗口，本地对话与远程对话并存。**
+
+把任意一台 SSH 机器接进 DSH，把远端目录变成普通工作区。在这个工作区里，模型读写文件、
+搜索、执行命令、开终端、转发端口，全部发生在远端；界面还是你现在这个窗口。
+
+- **对话优先**：只有一个状态胶囊、几处标识；控制台点开才出现，不抢主界面。
+- **多机并行**：每台机器一个颜色身份、一条独立连接、一组自己的工作区与会话。
+- **远端零安装**：只用 `sshd`——SFTP 读文件、exec 通道跑命令与搜索、PTY 开终端、
+  `direct-tcpip` 做端口转发。
+
+## 界面
+
+| 控制台 | 快速面板 |
+| --- | --- |
+| ![控制台](docs/design/v2/03.png) | ![快速面板](docs/design/v2/01.png) |
+
+| 会话标识 | 添加机器 |
+| --- | --- |
+| ![会话标识](docs/design/v2/02.png) | ![添加机器](docs/design/v2/05.png) |
+
+| 新建工作区 | 终端与端口 |
+| --- | --- |
+| ![新建工作区](docs/design/v2/04.png) | ![终端与端口](docs/design/v2/06.png) |
+
+截图由 `docs/design/v2/` 的脱敏设计稿渲染；主机名、地址和路径均为演示数据
+（`dev-box`、`203.0.113.10`、`/srv/demo-app`）。
+
+## 能力
+
+| 模块 | 内容 |
+| --- | --- |
+| 连接 | 多机器、密钥/密码、`~/.ssh/config` 导入、测试连接（系统/延迟）、按机器自动连接（默认关闭，可在对话框/快速面板/控制台切换）、keepalive + 退避重连 |
+| 工作区 | 面包屑浏览、筛选、键盘操作、自定义侧栏名、添加/移除（不删远端目录） |
+| 会话标识 | 头部机器胶囊、侧栏彩色徽标、悬停卡远程路径；本地会话保持原样 |
+| 控制台 | 机器栏、主机概览、指标、工作区卡片、最近会话、搜索 |
+| 终端 | 完整 xterm.js 终端：颜色、光标、全屏程序，键盘/Ctrl 组合/粘贴，重连缓冲 |
+| 端口 | 自动发现监听端口、一键转发、持久化、连接恢复后重建 |
+| 主题 | 浅色/深色，跟随 DSH 主题 |
+
+## 安装
+
+插件市场上架后（或 npm 发布后）：
+
+```sh
+dsh plugin add dsh-remote-deck
+```
+
+直接从 GitHub 安装：
+
+```sh
+dsh plugin add git+https://github.com/dsh-plugins-cn/dsh-remote-deck.git
+```
+
+国内网络可走 GitHub 代理：
+
+```sh
+dsh plugin add "git+https://ghproxy.laiyouxi.com/https://github.com/dsh-plugins-cn/dsh-remote-deck.git"
+```
+
+从源码安装：
+
+```sh
+git clone https://github.com/dsh-plugins-cn/dsh-remote-deck.git
+cd dsh-remote-deck
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Profile desktop
+```
+
+装完重启 DSH（或窗口里按 `Ctrl+R`），侧栏底部出现 **SSH** 胶囊，导航里出现 **远程开发**。
+
+插件**没有任何 npm 依赖**：`ssh2` 及其依赖内置在 `vendor/node_modules`，终端资源在
+`vendor/xterm`。安装过程不会执行任何构建脚本。
+
+## 从 dsh-remote-ssh 迁移
+
+- 首次加载会把 `<DSH_HOME>/remote-ssh` 的连接复制过来，并**原地复用**已有工作区，
+  侧栏位置、会话归属都不变。
+- 旧插件在卸载前一直可用；**同一个 profile 不要同时启用两个**（都会接管 `ctx.fs`）。
+- 一条命令切换（会先备份 `package.json`，旧插件文件保留以便回滚）：
+
+  ```powershell
+  .\install.ps1 -Profile desktop -RemoveOld
+  ```
+
+- 一键回滚：
+
+  ```powershell
+  .\install.ps1 -Rollback                 # 还原 package.json.bak-before-deck
+  ```
+
+插件数据在 `<DSH_HOME>/remote-deck`，重装不丢。
+
+## 原理
+
+```text
+┌────────────────────────────── DSH 桌面 ─────────────────────────────────┐
+│ 对话 · 侧栏 · Remote Deck 控制台                                        │
+│        │ ctx.fs / ctx.shell / ripgrep / tools                           │
+│        ▼                                                                │
+│ host 半：连接池、工作区 stub、回环 API                                   │
+└────────┬────────────────────────────────────────────────────────────────┘
+         │ SSH（ssh2）：exec 通道 · SFTP · PTY · 端口转发
+         ▼
+   远端机器：只需要 sshd（Linux / macOS）
+```
+
+远程工作区是 `<DSH_HOME>/remote-deck/workspaces` 下带标记文件的目录，标记记录连接 id 和远端
+POSIX 路径。落在标记目录下的路径走 SFTP；命令走带远端 cwd 的 exec 通道；ripgrep 移到远端；
+终端是一条 PTY；每个转发是一个本地监听。
+
+## 安全
+
+- 密码、私钥口令存 DSH 凭据库，不写进 `connections.json`。
+- 浏览器半通过带回环 token 的本地 HTTP 与 host 通信；终端与转发接口同样受 token 保护。
+- 移除工作区只取消本地注册，插件从不删除远端文件。
+
+## 要求
+
+- DSH 桌面版 0.2.x 及以上；Node 20+。
+- 远端有 `sshd`，支持 Linux / macOS，远端 shell 为 `bash`。
+
+## 已知限制
+
+- 终端内置 xterm.js（颜色、光标、全屏程序）；如果资产加载被拦截，会回退为纯文本行渲染。
+- 界面目前中文优先，英文文案在 v1.1.0。
+- `~/.ssh/config` 导入覆盖 Host/HostName/Port/User/IdentityFile/ProxyJump；代理命令与
+  known_hosts 固定还没接进连接对话框。
+- 自动端口发现依赖 `ss` 或 `netstat`；手动转发不受影响。
+
+## 开发
+
+```sh
+npm run check        # 语法 + manifest
+npm test             # 解析器单元测试
+npm run pack:dry     # 查看发布文件清单
+```
+
+脱敏后的设计稿与渲染截图在 `docs/design/v2/`，验收结果记录在 CHANGELOG。
+版本计划见 [ROADMAP.md](ROADMAP.md)，发布步骤见 [PUBLISH.md](PUBLISH.md)，
+日常迭代与故障处理见 [docs/MAINTENANCE.md](docs/MAINTENANCE.md)。
+
+## 许可证
+
+MIT

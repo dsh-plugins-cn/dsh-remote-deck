@@ -1,0 +1,6 @@
+# dsh-remote-deck bundle patch.
+# The host half is inserted as one Loader row; the browser half is discovered
+# from package.json → dsh.client, so no second row is needed.
+- insert:
+    - id: remote-deck
+      name: 'dsh-remote-deck'

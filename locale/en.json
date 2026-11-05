@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Remote Deck",
+    "description": "SSH workspaces for DeepSeek Harness: connect any number of machines, browse remote folders, and run sessions with the remote filesystem, shell, search, terminal and port forwarding."
+  }
+}

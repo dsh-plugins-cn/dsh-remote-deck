@@ -1,0 +1,60 @@
+name: Bug report
+description: Something in Remote Deck does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please run `powershell -ExecutionPolicy Bypass -File .\install.ps1 -Doctor`
+        and paste the output (remove hostnames if you prefer).
+  - type: input
+    id: version
+    attributes:
+      label: Remote Deck version
+      description: The installed version or the host build shown in the panel footer.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: dsh
+    attributes:
+      label: DSH version and platform
+      placeholder: "DSH desktop 0.2.x on Windows 11"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Connection / authentication
+        - Workspace browsing or creation
+        - Session identity
+        - Console
+        - Terminal
+        - Port forwarding
+        - Theme / layout
+        - Installation / migration
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps, expected result and actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Errors and logs
+      description: UI error text, `DSH_REMOTE_DECK_DEBUG=1` host logs, or screenshots.
+      render: text
+  - type: checkboxes
+    id: secrets
+    attributes:
+      label: Secrets
+      options:
+        - label: I have removed passwords, private keys, hostnames and session data from this report.
+          required: true

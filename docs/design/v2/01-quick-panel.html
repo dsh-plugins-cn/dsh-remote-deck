@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>01 · 快速面板</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  .panel {
+    position: absolute; left: 16px; bottom: 62px; width: 404px; z-index: 60;
+    background: #fff; border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(16, 24, 40, .22), 0 2px 6px rgba(16, 24, 40, .06);
+    overflow: hidden;
+  }
+  .panel .ph-head { display: flex; align-items: center; gap: 8px; padding: 13px 14px 10px; }
+  .panel .ph-head .t { font-size: 13px; font-weight: 700; }
+  .panel .ph-head .s { font-size: 10.5px; color: var(--text-3); margin-top: 1px; }
+  .panel .ph-head .r { margin-left: auto; display: flex; gap: 4px; color: var(--text-3); }
+  .panel .ph-head .r span { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; }
+  .panel .ph-head .r span:hover { background: var(--hover); }
+
+  .hostpick { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; padding: 0 14px 10px; }
+  .hp { border: 1px solid var(--border); border-radius: 9px; padding: 8px 9px; display: flex; flex-direction: column; gap: 6px; position: relative; }
+  .hp.on { border-color: #a9c9ec; background: #f4f9ff; box-shadow: 0 0 0 2px rgba(47, 125, 221, .09); }
+  .hp .r1 { display: flex; align-items: center; gap: 6px; }
+  .hp .box { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; color: #fff; }
+  .hp .box.blue { background: linear-gradient(160deg, #4a97ea, #2f7ddd); }
+  .hp .box.teal { background: linear-gradient(160deg, #33bfae, #12a594); }
+  .hp .box.add { background: #f2f4f7; color: var(--text-3); }
+  .hp .box svg { width: 11px; height: 11px; }
+  .hp .nm { font-size: 11.5px; font-weight: 600; }
+  .hp .st { font-size: 9.5px; color: var(--text-3); display: flex; align-items: center; gap: 4px; }
+  .hp .st .lat { font-family: var(--mono); color: #4c8f5c; }
+  .hp.add { border-style: dashed; align-items: center; justify-content: center; color: var(--text-3); font-size: 11px; }
+
+  .ph-sect { display: flex; align-items: center; padding: 7px 14px 6px; font-size: 10.5px; color: var(--text-3); font-weight: 600; letter-spacing: .02em; }
+  .ph-sect .r { margin-left: auto; font-weight: 400; color: var(--brand); font-size: 10.5px; }
+  .wslist { padding: 0 8px; }
+  .wsrow2 { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 9px; }
+  .wsrow2:hover { background: #f7f8fa; }
+  .wsrow2 .fi { width: 26px; height: 26px; border-radius: 7px; background: #eef4fc; color: var(--h-blue); display: grid; place-items: center; flex: none; }
+  .wsrow2 .fi.teal { background: #e7f7f4; color: var(--h-teal); }
+  .wsrow2 .fi.amber { background: #fdf4e7; color: var(--h-amber); }
+  .wsrow2 .nm { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+  .wsrow2 .nm .cur { font-size: 9px; color: #1b7a33; background: var(--ok-weak); border-radius: 3px; padding: 0 3px; font-weight: 600; }
+  .wsrow2 .pa { font-family: var(--mono); font-size: 10px; color: var(--text-3); margin-top: 2px; }
+  .wsrow2 .rt { margin-left: auto; text-align: right; font-size: 9.5px; color: var(--text-4); line-height: 1.5; }
+  .wsrow2 .rt b { color: var(--text-2); font-weight: 500; }
+
+  .quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 6px 14px 12px; }
+  .qa { border: 1px solid var(--border-soft); border-radius: 9px; padding: 9px 4px 7px; display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 10.5px; color: var(--text-2); }
+  .qa:hover { background: #fafbfc; border-color: var(--border); }
+  .qa svg { color: var(--text-3); }
+  .panel .ph-foot { border-top: 1px solid var(--border-soft); background: #fbfbfc; padding: 8px 14px; display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-3); }
+  .panel .ph-foot .mono { font-family: var(--mono); }
+  .panel .ph-foot .r { margin-left: auto; color: var(--text-4); }
+</style>
+</head>
+<body data-active="ssh-pool" data-connected="dev-box">
+<div class="shell">
+  <aside class="sidebar" id="side"></aside>
+
+  <main class="main">
+    <div class="topbar">
+      <span class="back"><svg class="i sm"><use href="#i-arrowleft"/></svg></span>
+      <span class="title">重构 SSH 连接池</span>
+      <span class="right">
+        <span class="pill machine"><span class="hdot ok"></span><svg class="i xs"><use href="#i-server"/></svg>dev-box · demo-app<svg class="i xs"><use href="#i-chevdown"/></svg></span>
+        <span class="iconbtn"><svg class="i"><use href="#i-more"/></svg></span>
+      </span>
+    </div>
+    <div class="content">
+      <div class="chat" style="padding-top:34px">
+        <div class="msg-user">现在 `fs.readText` 每次都要重新握手吗？如果是，先把连接复用做掉。</div>
+        <div class="msg-assistant">
+          <span class="avatar">DS</span>
+          <div class="msg-body">
+            不是每次。`ctx.fs` 的每次调用都复用同一个 SFTP 会话，但 <b>rg / 命令</b> 走的是 exec 通道，之前是每次新开一条。
+            <div class="toolcard">
+              <div class="th"><svg class="i xs"><use href="#i-term"/></svg>bash · /srv/demo-app</div>
+              <div class="tb">$ time rg -l "createHash" src | wc -l<br>12<br><span style="color:#8f959e">real 0m0.18s</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="composer">
+        <div class="ctx"><svg class="i xs"><use href="#i-folder"/></svg>dev-box · /srv/demo-app</div>
+        <div class="box">
+          <div class="ph">描述你想要的改动，@ 引用远程文件，或 / 调用指令</div>
+          <div class="bar">
+            <span>+</span><span>工作区内修改</span>
+            <span class="send"><svg class="i sm"><use href="#i-arrowup"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- quick panel -->
+    <div class="panel">
+      <div class="ph-head">
+        <div><div class="t">远程开发</div><div class="s">1 台已连接 · 4 个工作区</div></div>
+        <div class="r">
+          <span><svg class="i sm"><use href="#i-sliders"/></svg></span>
+          <span><svg class="i sm"><use href="#i-x"/></svg></span>
+        </div>
+      </div>
+
+      <div class="hostpick">
+        <div class="hp on">
+          <div class="r1"><span class="box blue"><svg class="i"><use href="#i-server"/></svg></span><span class="nm">dev-box</span><span class="hdot ok" style="margin-left:auto"></span></div>
+          <div class="st">已连接 <span class="lat">12ms</span></div>
+        </div>
+        <div class="hp">
+          <div class="r1"><span class="box teal"><svg class="i"><use href="#i-server"/></svg></span><span class="nm">build-box</span><span class="hdot idle" style="margin-left:auto"></span></div>
+          <div class="st">未连接</div>
+        </div>
+        <div class="hp add"><svg class="i sm"><use href="#i-plus"/></svg>添加机器</div>
+      </div>
+
+      <div class="ph-sect">最近工作区 <span class="r">全部 ›</span></div>
+      <div class="wslist">
+        <div class="wsrow2">
+          <span class="fi"><svg class="i sm"><use href="#i-folder"/></svg></span>
+          <div><div class="nm">demo-app <span class="cur">已打开</span></div><div class="pa">/srv/demo-app</div></div>
+          <div class="rt"><b>3 个会话</b><br>12 分钟前</div>
+        </div>
+        <div class="wsrow2">
+          <span class="fi teal"><svg class="i sm"><use href="#i-folder"/></svg></span>
+          <div><div class="nm">inference-api</div><div class="pa">/srv/inference-api</div></div>
+          <div class="rt"><b>1 个会话</b><br>昨天</div>
+        </div>
+        <div class="wsrow2">
+          <span class="fi amber"><svg class="i sm"><use href="#i-folder"/></svg></span>
+          <div><div class="nm">data-pipeline</div><div class="pa">/srv/pipeline</div></div>
+          <div class="rt"><b>未使用</b><br>3 天前</div>
+        </div>
+      </div>
+
+      <div class="ph-sect">快捷操作</div>
+      <div class="quick">
+        <div class="qa"><svg class="i sm"><use href="#i-plus"/></svg>新建工作区</div>
+        <div class="qa"><svg class="i sm"><use href="#i-term"/></svg>远程终端</div>
+        <div class="qa"><svg class="i sm"><use href="#i-link"/></svg>端口转发</div>
+        <div class="qa"><svg class="i sm"><use href="#i-server"/></svg>控制台</div>
+      </div>
+
+      <div class="ph-foot">
+        <span class="hdot ok"></span><span>dev-box</span>
+        <span class="mono">· Linux 5.14 · 12ms</span>
+        <span class="r">host 2026-11-04</span>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>
