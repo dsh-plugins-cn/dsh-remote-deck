@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.1.0] - 2026-11-05
+
+### Added
+
+- Console **文件** tab: browse the remote directory tree with breadcrumbs, filter and workspace
+  shortcuts, download a file through the browser, save it to
+  `%USERPROFILE%\Downloads\Remote Deck\<host>\...` and reveal it in Explorer.
+- Host endpoints `GET /connections/:id/files`, `GET /connections/:id/download`,
+  `POST /connections/:id/save-local` and `POST /connections/:id/reveal`, all token protected.
+  Local paths are sanitized, name collisions get a numeric suffix and reveal is restricted to the
+  download root.
+
 ## [1.0.5] - 2026-11-05
 
 ### Added

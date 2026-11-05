@@ -172,6 +172,7 @@ window.__ModuleLoader__.load({
       chev: '<path d="M6 9l6 6 6-6"/>',
       x: '<path d="M6 6l12 12M18 6L6 18"/>',
       folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+      file: '<path d="M6 2h7l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M13 2v6h6"/>',
       term: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/>',
       refresh: '<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>',
       edit: '<path d="M4 20h4L20 8l-4-4L4 16z"/>',
@@ -349,6 +350,33 @@ window.__ModuleLoader__.load({
       .rd-empty { border:1px dashed rgba(15,23,42,.18);border-radius:12px;padding:28px;text-align:center;color:var(--dsw-alias-label-secondary,#8f959e);font-size:12px;line-height:1.7 }
       .rd-empty .rd-btn { margin-top:12px }
       .rd-pico { display:inline-flex;align-items:center;justify-content:center;flex:none;width:16px;height:16px;color:inherit }
+
+      /* ---- remote files ---- */
+      .rd-files { padding: 12px 0 18px }
+      .rd-fbar { display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap }
+      .rd-crumbs { display:flex;align-items:center;gap:2px;flex-wrap:wrap;min-width:0 }
+      .rd-crumb { border:0;background:none;padding:3px 6px;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-secondary,#5f6672);cursor:pointer;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+      .rd-crumb:hover { background:rgba(15,23,42,.06);color:var(--dsw-alias-label-primary,#1f2329) }
+      .rd-crumb.on { color:var(--dsw-alias-label-primary,#1f2329);font-weight:600 }
+      .rd-crumb + .rd-crumb::before { content:'/';color:var(--dsw-alias-label-secondary,#8f959e);margin-right:2px }
+      .rd-fright { display:flex;align-items:center;gap:8px;margin-left:auto }
+      .rd-fsearch { width:150px;height:28px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.14));border-radius:7px;padding:0 8px;font-size:12px;background:var(--dsw-alias-bg-l1,#fff);color:inherit;outline:none }
+      .rd-fjump { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-fchip { border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.14));background:none;border-radius:999px;padding:2px 9px;font-size:11px;color:inherit;cursor:pointer }
+      .rd-fchip:hover { background:rgba(15,23,42,.05) }
+      .rd-fnotice { margin-bottom:10px;padding:7px 10px;border-radius:8px;background:rgba(29,111,196,.08);color:#1d6fc4;font-size:11.5px;word-break:break-all }
+      .rd-flist { border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:10px;overflow:hidden }
+      .rd-frow { display:grid;grid-template-columns:18px minmax(0,1fr) 84px 92px auto;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.06));font-size:12.5px;color:var(--dsw-alias-label-primary,#1f2329) }
+      .rd-frow:first-child { border-top:0 }
+      .rd-frow:hover { background:rgba(15,23,42,.035) }
+      .rd-frow.dir { cursor:pointer }
+      .rd-fname { overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+      .rd-fsize, .rd-fmod { color:var(--dsw-alias-label-secondary,#8f959e);font-size:11px;text-align:right }
+      .rd-factions { display:flex;gap:6px;justify-content:flex-end;opacity:0;transition:opacity .12s }
+      .rd-frow:hover .rd-factions { opacity:1 }
+      [data-rd-theme="dark"] .rd-crumb:hover, [data-rd-theme="dark"] .rd-frow:hover { background:rgba(255,255,255,.06) }
+      [data-rd-theme="dark"] .rd-fnotice { background:rgba(99,182,255,.14);color:#8ecbff }
+      [data-rd-theme="dark"] .rd-fsearch { background:#12161b;border-color:rgba(255,255,255,.14) }
 
       /* ---- dialogs ---- */
       .rd-overlay { position:fixed;inset:0;background:rgba(17,24,39,.32);z-index:1200;display:flex;align-items:center;justify-content:center }
@@ -1789,6 +1817,140 @@ window.__ModuleLoader__.load({
     }
 
 
+    function FilePanel({ host }) {
+      try {
+        return FilePanelInner({ host })
+      } catch (error) {
+        return h('div', { className: 'rd-err', style: { margin: '12px 0' } }, '文件面板出错：' + (error && error.message ? error.message : String(error)))
+      }
+    }
+
+    function FilePanelInner({ host }) {
+      const [path, setPath] = React.useState('')
+      const [entries, setEntries] = React.useState([])
+      const [loading, setLoading] = React.useState(false)
+      const [error, setError] = React.useState('')
+      const [filter, setFilter] = React.useState('')
+      const [notice, setNotice] = React.useState('')
+      const stateWorkspaces = (store.state && store.state.workspaces) || []
+      const workspace = stateWorkspaces.find((row) => row.connectionId === host.id)
+      const root = workspace ? workspace.path : '/'
+
+      const load = React.useCallback(async (next) => {
+        setLoading(true)
+        setError('')
+        setNotice('')
+        try {
+          const target = typeof next === 'string' && next.length > 0 ? next : root
+          const data = await call('/connections/' + host.id + '/files?path=' + encodeURIComponent(target))
+          setPath(data.path)
+          setEntries(data.entries || [])
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        } finally {
+          setLoading(false)
+        }
+      }, [host.id, root])
+
+      React.useEffect(() => {
+        setPath('')
+        setEntries([])
+        setFilter('')
+        void load(root)
+      }, [host.id])
+
+      async function download(entry) {
+        const info = boot()
+        if (info === null) return
+        const url = apiBase() + '/connections/' + host.id + '/download?path=' + encodeURIComponent(entry.path) + '&token=' + encodeURIComponent(info.token)
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = entry.name
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        setNotice('已开始下载 ' + entry.name)
+      }
+
+      async function saveLocal(entry) {
+        try {
+          const result = await call('/connections/' + host.id + '/save-local', { method: 'POST', body: { path: entry.path } })
+          setNotice('已保存到 ' + result.localPath)
+          await call('/connections/' + host.id + '/reveal', { method: 'POST', body: { localPath: result.localPath } }).catch(() => {})
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+      }
+
+      function crumbsFor(value) {
+        const all = [{ label: '/', value: '/' }]
+        let acc = ''
+        for (const part of value.split('/').filter(Boolean)) {
+          acc += '/' + part
+          all.push({ label: part, value: acc })
+        }
+        return all
+      }
+
+      const crumbs = crumbsFor(path || root)
+      const hostWorkspaces = stateWorkspaces.filter((row) => row.connectionId === host.id)
+      const visible = entries.filter((entry) => entry.name.toLowerCase().includes(filter.toLowerCase()))
+
+      return h('div', { className: 'rd-files' },
+        h('div', { className: 'rd-fbar' },
+          h('div', { className: 'rd-crumbs' },
+            crumbs.map((crumb, index) => h('button', {
+              key: crumb.value,
+              className: 'rd-crumb' + (index === crumbs.length - 1 ? ' on' : ''),
+              onClick: () => void load(crumb.value),
+            }, crumb.label)),
+          ),
+          h('div', { className: 'rd-fright' },
+            h('input', { className: 'rd-fsearch', value: filter, placeholder: '筛选文件…', onChange: (event) => setFilter(event.target.value) }),
+            h('button', { className: 'rd-btn sm', onClick: () => void load(path) }, h(Icon, { name: 'refresh', size: 12 }), '刷新'),
+          ),
+        ),
+        hostWorkspaces.length > 0 ? h('div', { className: 'rd-fjump' },
+          h('span', null, '快速跳转：'),
+          hostWorkspaces.map((row) => h('button', { key: row.workspaceId || row.path, className: 'rd-fchip', onClick: () => void load(row.path) }, row.folder || row.title || row.path)),
+        ) : null,
+        notice ? h('div', { className: 'rd-fnotice' }, notice) : null,
+        error ? h('div', { className: 'rd-err' }, error) : null,
+        loading ? h('div', { className: 'rd-empty', style: { padding: '20px' } }, '正在读取远程目录…') : null,
+        !loading && !error && visible.length === 0 ? h('div', { className: 'rd-empty', style: { padding: '20px' } }, '这个目录是空的。') : null,
+        !loading && visible.length > 0 ? h('div', { className: 'rd-flist' },
+          visible.map((entry) => h('div', {
+            key: entry.path,
+            className: 'rd-frow' + (entry.type === 'dir' ? ' dir' : ''),
+            onClick: entry.type === 'dir' ? () => void load(entry.path) : undefined,
+          },
+            h(Icon, { name: entry.type === 'dir' ? 'folder' : 'file', size: 14 }),
+            h('span', { className: 'rd-fname', title: entry.name }, entry.name),
+            h('span', { className: 'rd-fsize' }, entry.type === 'dir' ? '文件夹' : formatBytes(entry.size)),
+            h('span', { className: 'rd-fmod' }, entry.mtime ? ago(entry.mtime) : ''),
+            h('span', { className: 'rd-factions' },
+              entry.type === 'dir' ? null : h('button', {
+                className: 'rd-btn sm',
+                onClick: (event) => { event.stopPropagation(); void download(entry) },
+              }, '下载'),
+              entry.type === 'dir' ? null : h('button', {
+                className: 'rd-btn sm',
+                onClick: (event) => { event.stopPropagation(); void saveLocal(entry) },
+              }, '本地显示'),
+            ),
+          )),
+        ) : null,
+      )
+    }
+
+    function formatBytes(value) {
+      const size = Number(value) || 0
+      if (size < 1024) return size + ' B'
+      if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB'
+      if (size < 1024 * 1024 * 1024) return (size / (1024 * 1024)).toFixed(1) + ' MB'
+      return (size / (1024 * 1024 * 1024)).toFixed(1) + ' GB'
+    }
+
     function Console() {
       const state = useStore((s) => s.state)
       const ready = useStore((s) => s.ready)
@@ -1907,13 +2069,13 @@ window.__ModuleLoader__.load({
           ),
           h('section', { className: 'rd-cpane' },
             h('div', { className: 'rd-tabs' },
-              [['overview', '概览'], ['terminal', '终端'], ['ports', '端口转发']].map(([id, label]) => h('button', {
+              [['overview', '概览'], ['terminal', '终端'], ['files', '文件'], ['ports', '端口转发']].map(([id, label]) => h('button', {
                 key: id,
                 className: 'rd-tab' + (tab === id ? ' on' : ''),
                 onClick: () => { store.consoleTab = id; emit() },
               }, label)),
             ),
-            tab === 'overview' ? null : (tab === 'terminal' ? h(TerminalPanel, { host }) : h(PortsPanel, { host })),
+            tab === 'overview' ? null : (tab === 'terminal' ? h(TerminalPanel, { host }) : tab === 'files' ? h(FilePanel, { host }) : h(PortsPanel, { host })),
             host.error ? h('div', { className: 'rd-err', style: { margin: '0 0 12px' } }, host.error) : null,
             h('div', { className: 'rd-overview', style: { display: tab === 'overview' ? 'contents' : 'none' } },
             h('div', { className: 'rd-chead' },

@@ -38,7 +38,7 @@ addresses and paths are demo data (`dev-box`, `203.0.113.10`, `/srv/demo-app`).
 | Connections | Multiple hosts, key or password auth, `~/.ssh/config` import, connection test with OS/latency, per-host auto-connect (off by default; toggle in the dialog, quick panel or console), keepalive and backoff reconnect |
 | Workspaces | Browse remote folders with breadcrumbs, filters and keyboard navigation; add one as a DSH workspace; custom sidebar name; remove locally without touching the remote directory |
 | Sessions | Remote sessions get a header pill, a colour-coded sidebar badge and a hover line; local sessions are unchanged |
-| Console | Machine rail, host overview, stats, workspace cards, recent sessions, search |
+| Console | Machine rail, host overview, stats, workspace cards, recent sessions, search, and a remote file browser with download / save-to-local / reveal |
 | Terminal | Remote PTY in a full xterm.js terminal: colours, cursor, full-screen programs, paste and replay buffer |
 | Ports | Automatic discovery of remote listening ports, one-click forwarding, persistence and restore on reconnect |
 | Theme | Light and dark, driven by DSH theme tokens |
