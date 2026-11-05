@@ -384,9 +384,10 @@ window.__ModuleLoader__.load({
       [data-rd-theme="dark"] .rd-pill-restore { border-color:rgba(124,196,255,.4);background:rgba(124,196,255,.12);color:#7cc4ff }
 
       .rd-dl-wrap { display:inline-flex;margin-left:4px }
-      .rd-dl { display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.14));border-radius:6px;background:transparent;color:inherit;cursor:pointer }
-      .rd-dl:hover { background:rgba(15,23,42,.06) }
-      [data-rd-theme="dark"] .rd-dl:hover { background:rgba(255,255,255,.08) }
+      .rd-dl { display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#5f6672);cursor:pointer;flex:none }
+      .rd-dl:hover { background:var(--dsw-alias-bg-l2, rgba(15,23,42,.06));color:var(--dsw-alias-label-primary,#1f2329) }
+      [data-rd-theme="dark"] .rd-dl { color:var(--dsw-alias-label-secondary,#a8b0bb) }
+      [data-rd-theme="dark"] .rd-dl:hover { background:rgba(255,255,255,.08);color:#e6e8eb }
 
       /* ---- dialogs ---- */
       .rd-overlay { position:fixed;inset:0;background:rgba(17,24,39,.32);z-index:1200;display:flex;align-items:center;justify-content:center }
@@ -2305,7 +2306,7 @@ window.__ModuleLoader__.load({
         title: '下载到本机：' + target,
         'aria-label': '下载到本机',
         onClick: download,
-      }, h(Icon, { name: 'download', size: 14 }))
+      }, h(Icon, { name: 'download', size: 16 }))
     }
 
     function DeliverableDownloadAction(props) {
@@ -2346,7 +2347,7 @@ window.__ModuleLoader__.load({
           title: '下载到本机',
           'aria-label': '下载到本机',
           onClick: download,
-        }, h(Icon, { name: 'download', size: 14 })),
+        }, h(Icon, { name: 'download', size: 16 })),
       )
     }
 

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.1.6] - 2026-11-05
+
+### Changed
+
+- The download control now matches the preview toolbar's own icon buttons: 28×28, no border,
+  inherited muted colour, 6 px radius, subtle hover background, 16 px glyph.
+
 ## [1.1.5] - 2026-11-05
 
 ### Added
