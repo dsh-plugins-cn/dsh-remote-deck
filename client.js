@@ -348,8 +348,7 @@ window.__ModuleLoader__.load({
       .rd-sess .m2 { margin-left:auto;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
       .rd-empty { border:1px dashed rgba(15,23,42,.18);border-radius:12px;padding:28px;text-align:center;color:var(--dsw-alias-label-secondary,#8f959e);font-size:12px;line-height:1.7 }
       .rd-empty .rd-btn { margin-top:12px }
-      .rd-pico { display:grid;place-items:center;border-radius:7px;color:var(--dsw-alias-label-secondary,#5f6672);cursor:pointer }
-      .rd-pico[data-active="true"] { color:#1d6fc4;background:rgba(29,111,196,.12) }
+      .rd-pico { display:inline-flex;align-items:center;justify-content:center;flex:none;width:16px;height:16px;color:inherit }
 
       /* ---- dialogs ---- */
       .rd-overlay { position:fixed;inset:0;background:rgba(17,24,39,.32);z-index:1200;display:flex;align-items:center;justify-content:center }
@@ -1256,11 +1255,11 @@ window.__ModuleLoader__.load({
       return out
     }
 
-    function ConsoleIcon({ size = 18, active }) {
+    function ConsoleIcon({ size = 16, active }) {
       return h('span', {
         className: 'rd-pico',
         'data-active': String(active === true),
-        style: { width: size + 8, height: size + 8 },
+        style: { width: size + 'px', height: size + 'px' },
         title: 'Remote Deck',
       }, h(Icon, { name: 'server', size }))
     }

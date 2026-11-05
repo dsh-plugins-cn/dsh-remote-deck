@@ -27,7 +27,7 @@ const DATA_DIR = join(DSH_HOME, 'remote-deck')
 const LEGACY_DIR = join(DSH_HOME, 'remote-ssh')
 const WORKSPACE_ROOT = join(DATA_DIR, 'workspaces')
 const LEGACY_WORKSPACE_ROOT = join(LEGACY_DIR, 'workspaces')
-const BUILD = '1.0.2'
+const BUILD = '1.0.3'
 const SHELL_TIMEOUT_MS = 120000
 
 /** Services the plugin needs; web server and credentials store stay optional. */

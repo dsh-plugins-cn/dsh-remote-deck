@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.0.3] - 2026-11-05
+
+### Fixed
+
+- The sidebar entry **远程开发** now uses the same 16 px icon slot, row height and inherited icon
+  colour as the built-in DSH navigation rows, so its icon and label line up with 插件 / 自动化任务.
+
 ## [1.0.2] - 2026-11-05
 
 ### Security
