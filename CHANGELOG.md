@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.2.1] - 2026-11-06
+
+### Fixed
+
+- New remote workspace dialog:
+  - **新建文件夹** no longer calls `window.prompt` (unsupported in the desktop/web surface); it
+    opens an inline name input and creates the folder through `/mkdir`;
+  - the path field gains a **create** button that recursively creates a missing POSIX path;
+  - **添加工作区** now uses the typed path instead of the last browsed path, and the Host creates
+    any missing parent directories instead of silently falling back to the browsed root.
+
 ## [1.2.0] - 2026-11-06
 
 ### Changed

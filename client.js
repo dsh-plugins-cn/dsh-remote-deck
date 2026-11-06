@@ -389,6 +389,8 @@ window.__ModuleLoader__.load({
       [data-rd-theme="dark"] .rd-dl { color:var(--dsw-alias-label-secondary,#a8b0bb) }
       [data-rd-theme="dark"] .rd-dl:hover { background:rgba(255,255,255,.08);color:#e6e8eb }
 
+      .rd-newfolder { display: inline-flex; align-items: center; gap: 6px; }
+      .rd-newfolder .rd-input { width: 150px; }
       /* ---- failed-send recovery ---- */
       .rd-recover { margin: 0 0 10px; border: 1px solid #f0d9ae; background: #fffaf0; border-radius: 12px; padding: 10px 12px; }
       .rd-recover .rt { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #9a5b00; }
@@ -1084,10 +1086,12 @@ window.__ModuleLoader__.load({
       const [busy, setBusy] = React.useState('')
       const [error, setError] = React.useState('')
       const [pendingDelete, setPendingDelete] = React.useState('')
+      const [newFolder, setNewFolder] = React.useState(null)
 
       const connections = (state && state.connections) || []
       const host = connections.find((row) => row.id === currentHost) || connections.find((row) => row.status === 'connected') || connections[0]
       const existing = ((state && state.workspaces) || []).filter((row) => host && row.connectionId === host.id)
+      const targetPath = ((pathInput.trim() || (listing && listing.path) || '').replace(/\/+$/, '')) || '/'
 
       const load = React.useCallback(async (target, hostRow) => {
         if (!hostRow) return
@@ -1152,13 +1156,13 @@ window.__ModuleLoader__.load({
 
       const add = () => {
         void (async () => {
-          if (!listing || !host) return
+          if (!host || targetPath.length === 0) return
           setBusy('add')
           setError('')
           try {
             const result = await call('/connections/' + host.id + '/workspaces', {
               method: 'POST',
-              body: { path: listing.path, title: titleEdited ? title : undefined, writeGuide },
+              body: { path: targetPath, title: titleEdited ? title : undefined, writeGuide },
             })
             await refresh()
             if (openAfter) {
@@ -1201,12 +1205,12 @@ window.__ModuleLoader__.load({
           value: title,
           onChange: (event) => { setTitle(event.target.value); setTitleEdited(true) },
         })),
-        field('远程路径', h('div', { className: 'rd-wspath mono' }, listing ? listing.path : '—')),
+        field('远程路径', h('div', { className: 'rd-wspath mono' }, targetPath || '—')),
         h('div', { style: { marginTop: 10 } },
           toggleSwitch('写入 AGENTS.md', '告诉模型这里在远程机器上，路径用 POSIX', writeGuide, setWriteGuide),
           toggleSwitch('创建后打开新会话', '直接进入该工作区的对话', openAfter, setOpenAfter),
         ),
-        h('button', { className: 'rd-btn primary rd-wsadd', disabled: busy !== '' || !listing, onClick: add },
+        h('button', { className: 'rd-btn primary rd-wsadd', disabled: busy !== '' || !host || targetPath.length === 0, onClick: add },
           busy === 'add' ? '添加中…' : '添加工作区'),
         error ? h('div', { className: 'rd-err', style: { marginTop: 8 } }, error) : null,
         h('div', { className: 'rd-wsdivider' }),
@@ -1253,6 +1257,26 @@ window.__ModuleLoader__.load({
                 onKeyDown: (event) => { if (event.key === 'Enter') void load(pathInput.trim() || '~', host) },
               }),
               h('button', { className: 'rd-btn', disabled: busy !== '', onClick: () => void load(pathInput.trim() || '~', host) }, '前往'),
+              h('button', {
+                className: 'rd-btn',
+                disabled: busy !== '' || !pathInput.trim(),
+                title: '创建输入框中的目录（包含缺失的父目录）',
+                onClick: () => {
+                  void (async () => {
+                    const target = pathInput.trim()
+                    if (!target || !host) return
+                    setBusy('mkdir')
+                    setError('')
+                    try {
+                      await call('/connections/' + host.id + '/mkdir', { method: 'POST', body: { path: target, recursive: true } })
+                      await load(target, host)
+                    } catch (failure) {
+                      setError(failure instanceof Error ? failure.message : String(failure))
+                    }
+                    setBusy('')
+                  })()
+                },
+              }, h(Icon, { name: 'plus', size: 12 })),
               h('button', { className: 'rd-btn', disabled: busy !== '', onClick: () => void load(listing ? listing.path : '~', host) }, h(Icon, { name: 'refresh', size: 12 })),
             ),
             h('div', { className: 'rd-wscrumbs' },
@@ -1304,16 +1328,62 @@ window.__ModuleLoader__.load({
             ),
             h('div', { className: 'rd-wsfoot' },
               h('span', null, '双击进入目录 · ↑↓ 选择 · Enter 进入 · Backspace 上级'),
-              h('span', { className: 'rd-pill', style: { height: 24, cursor: 'pointer' }, onClick: () => {
-                const name = window.prompt('新建文件夹名')
-                if (!name || !listing) return
-                void (async () => {
-                  try {
-                    await call('/connections/' + host.id + '/mkdir', { method: 'POST', body: { path: listing.path, name } })
-                    await load(listing.path, host)
-                  } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
-                })()
-              } }, h(Icon, { name: 'plus', size: 12 }), '新建文件夹'),
+              newFolder === null
+                ? h('span', {
+                  className: 'rd-pill',
+                  style: { height: 24, cursor: 'pointer' },
+                  onClick: () => { setNewFolder(''); setError('') },
+                }, h(Icon, { name: 'plus', size: 12 }), '新建文件夹')
+                : h('span', { className: 'rd-newfolder' },
+                  h('input', {
+                    className: 'rd-input',
+                    style: { height: 24, width: 150 },
+                    value: newFolder,
+                    autoFocus: true,
+                    placeholder: '文件夹名',
+                    onChange: (event) => setNewFolder(event.target.value),
+                    onKeyDown: (event) => {
+                      if (event.key === 'Escape') setNewFolder(null)
+                      if (event.key !== 'Enter') return
+                      event.preventDefault()
+                      void (async () => {
+                        const name = newFolder.trim()
+                        if (!name || !listing) return
+                        setBusy('folder')
+                        setError('')
+                        try {
+                          await call('/connections/' + host.id + '/mkdir', { method: 'POST', body: { path: listing.path, name } })
+                          setNewFolder(null)
+                          await load(listing.path, host)
+                        } catch (failure) {
+                          setError(failure instanceof Error ? failure.message : String(failure))
+                        }
+                        setBusy('')
+                      })()
+                    },
+                  }),
+                  h('button', {
+                    className: 'rd-btn',
+                    disabled: busy !== '' || newFolder.trim().length === 0,
+                    onClick: () => {
+                      void (async () => {
+                        const name = newFolder.trim()
+                        if (!name || !listing) return
+                        setBusy('folder')
+                        setError('')
+                        try {
+                          await call('/connections/' + host.id + '/mkdir', { method: 'POST', body: { path: listing.path, name } })
+                          setNewFolder(null)
+                          await load(listing.path, host)
+                        } catch (failure) {
+                          setError(failure instanceof Error ? failure.message : String(failure))
+                        }
+                        setBusy('')
+                      })()
+                    },
+                  }, '创建'),
+                  h('button', { className: 'rd-btn', disabled: busy !== '', onClick: () => setNewFolder(null) }, '取消'),
+                ),
             ),
           ),
           preview,
