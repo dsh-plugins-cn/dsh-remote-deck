@@ -586,7 +586,6 @@ window.__ModuleLoader__.load({
       .rd-impmeta { font-family:ui-monospace,Consolas,monospace;font-size:9.5px;color:var(--dsw-alias-label-secondary,#8f959e);margin-top:2px }
       .rd-impkey { margin-left:auto;font-size:9px;color:#1b7a33;background:rgba(46,160,67,.1);border-radius:4px;padding:2px 5px;white-space:nowrap }
       .rd-importbtn { margin-top:10px;width:100% }
-      .rd-adv { display:flex;align-items:center;gap:6px;margin-top:12px;font-size:11px;color:var(--dsw-alias-label-secondary,#8f959e) }
       .rd-seg { display:inline-flex;padding:2px;background:var(--dsw-alias-border-l1, rgba(15,23,42,.06));border-radius:8px;height:32px;align-items:center }
       .rd-seg button { border:0;background:transparent;color:var(--dsw-alias-label-secondary,#5f6672);font-size:11.5px;padding:4px 12px;border-radius:6px;cursor:pointer;white-space:nowrap }
       .rd-mright3 .rd-grid3 { grid-template-columns: 76px 1fr 150px }
@@ -1158,7 +1157,6 @@ window.__ModuleLoader__.load({
         form.authType === 'key'
           ? field('私钥口令（可选）', h('input', { className: 'rd-input', type: 'password', value: form.passphrase, placeholder: form.hasPassword ? '已保存，留空不修改' : '', onChange: (e) => set({ passphrase: e.target.value }) }))
           : null,
-        h('div', { className: 'rd-adv' }, h(Icon, { name: 'chev', size: 12 }), '高级：跳板机、代理命令、主机指纹（v0.6.0）'),
         h('div', { className: 'rd-toggles' },
           toggleSwitch('启动时自动连接', 'DSH 启动后自动拨通', form.autoConnect, (value) => set({ autoConnect: value })),
           toggleSwitch('保存后立即连接', '省一次点击', form.connectAfter, (value) => set({ connectAfter: value })),

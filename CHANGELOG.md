@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Host dialog: removed the empty "高级：跳板机、代理命令、主机指纹" placeholder row. Jump host,
+  MFA, configurable keepalive and host-key verification from the 1.3 line are not included.
+
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
 ## [1.2.6] - 2026-11-06
