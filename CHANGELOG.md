@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.2.0] - 2026-11-06
+
+### Changed
+
+- Failed-send recovery is now per Session and only appears after a real send failure:
+  - the old global text clipboard is removed;
+  - the composer snapshot (text + attachment ids) is captured from DSH's input state;
+  - a session whose `promptError` is set shows a recovery card above its composer, and a
+    `恢复` shortcut in its header only;
+  - restore uses `inputActions.setDraft` / `addAttachments`; document references are best-effort
+    and may need to be re-mentioned;
+  - no TTL: the card stays until restored, ignored, or the session sends successfully again;
+  - the card never appears in another session.
+
 ## [1.1.7] - 2026-11-05
 
 ### Fixed

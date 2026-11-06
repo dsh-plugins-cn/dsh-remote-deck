@@ -389,6 +389,22 @@ window.__ModuleLoader__.load({
       [data-rd-theme="dark"] .rd-dl { color:var(--dsw-alias-label-secondary,#a8b0bb) }
       [data-rd-theme="dark"] .rd-dl:hover { background:rgba(255,255,255,.08);color:#e6e8eb }
 
+      /* ---- failed-send recovery ---- */
+      .rd-recover { margin: 0 0 10px; border: 1px solid #f0d9ae; background: #fffaf0; border-radius: 12px; padding: 10px 12px; }
+      .rd-recover .rt { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #9a5b00; }
+      .rd-recover .rtext { margin-top: 6px; font-size: 12.5px; line-height: 1.7; color: var(--dsw-alias-label-primary, #1f2329); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      .rd-recover .rchips { margin-top: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .rd-chip { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; background: rgba(15,23,42,.06); color: var(--dsw-alias-label-secondary, #5f6672); font-size: 11px; }
+      .rd-recover .ractions { margin-top: 9px; display: flex; align-items: center; gap: 8px; }
+      .rd-rbtn { height: 27px; padding: 0 12px; border-radius: 7px; font-size: 12px; border: 1px solid transparent; }
+      .rd-rbtn.primary { background: #1d6fc4; color: #fff; }
+      .rd-rbtn.ghost { background: transparent; color: var(--dsw-alias-label-secondary, #5f6672); }
+      .rd-recover .rhint { margin-top: 6px; font-size: 10.5px; color: #a3a8b0; }
+      [data-rd-theme="dark"] .rd-recover { background: rgba(210,153,34,.1); border-color: rgba(210,153,34,.35); }
+      [data-rd-theme="dark"] .rd-recover .rt { color: #e3b341; }
+      [data-rd-theme="dark"] .rd-recover .rtext { color: #e6e8eb; }
+      [data-rd-theme="dark"] .rd-chip { background: rgba(255,255,255,.08); color: #a8b0bb; }
+
       /* ---- dialogs ---- */
       .rd-overlay { position:fixed;inset:0;background:rgba(17,24,39,.32);z-index:1200;display:flex;align-items:center;justify-content:center }
       .rd-modal { background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2329);border-radius:16px;box-shadow:0 30px 80px rgba(15,23,42,.3);display:flex;flex-direction:column;overflow:hidden }
@@ -2376,69 +2392,131 @@ window.__ModuleLoader__.load({
       )
     }
 
-    // ---------------------------------------------------------------- draft guard
+    // ---------------------------------------------------------------- failed-send recovery
 
-    const draftGuard = { text: '', at: 0 }
-    const draftSubs = new Set()
+    const recoveryStore = new Map()
+    const recoverySubs = new Set()
 
-    function notifyDraft() {
-      for (const handler of draftSubs) handler()
+    function notifyRecovery() {
+      for (const handler of recoverySubs) handler()
     }
 
-    function restoreDraft() {
-      const composer = document.querySelector('[contenteditable="true"]')
-      if (!composer || draftGuard.text.length === 0) return false
-      composer.focus()
-      const selection = window.getSelection()
-      if (selection !== null) {
-        const range = document.createRange()
-        range.selectNodeContents(composer)
-        selection.removeAllRanges()
-        selection.addRange(range)
+    function setRecovery(sessionId, value) {
+      if (value) recoveryStore.set(sessionId, value)
+      else recoveryStore.delete(sessionId)
+      notifyRecovery()
+    }
+
+    function useRecovery(sessionId) {
+      const [, force] = React.useReducer((value) => value + 1, 0)
+      React.useEffect(() => {
+        recoverySubs.add(force)
+        return () => { recoverySubs.delete(force) }
+      }, [])
+      return recoveryStore.get(sessionId) || null
+    }
+
+    function restoreRecovery(sessionId, inputActions) {
+      const entry = recoveryStore.get(sessionId)
+      if (!entry) return false
+      try {
+        if (inputActions && typeof inputActions.setDraft === 'function') inputActions.setDraft(entry.text)
+        const ids = (entry.attachments || [])
+          .map((item) => (typeof item === 'string' ? item : item && (item.id || item.attachmentId)))
+          .filter(Boolean)
+        if (ids.length > 0 && inputActions && typeof inputActions.addAttachments === 'function') inputActions.addAttachments(ids)
+      } catch {
+        return false
       }
-      document.execCommand('insertText', false, draftGuard.text)
+      setRecovery(sessionId, null)
       return true
     }
 
-    function installDraftGuard() {
-      if (typeof document === 'undefined' || window.__rdDraftInstalled === true) return
-      window.__rdDraftInstalled = true
-      const isComposer = (node) => node instanceof HTMLElement && node.isContentEditable && node.getBoundingClientRect().width > 200
-      const remember = (node) => {
-        const value = (node.innerText || '').trim()
-        if (value.length === 0) return
-        draftGuard.text = value
-        draftGuard.at = Date.now()
-        notifyDraft()
+    function RecoveryDock(props) {
+      const { sessionId } = props
+      const remote = useRemote(sessionId)
+      const pendingRef = React.useRef(null)
+      const lastDraftRef = React.useRef(null)
+      const recovery = useRecovery(sessionId)
+      const input = typeof props.useInput === 'function' ? props.useInput((value) => value) : null
+      const draftValue = input === null ? null : (input.text !== undefined ? input.text : input.draft)
+      const inputText = typeof draftValue === 'string' ? draftValue : draftValue && typeof draftValue.text === 'string' ? draftValue.text : ''
+      const inputAttachments = input && Array.isArray(input.attachmentIds)
+        ? input.attachmentIds
+        : input && Array.isArray(input.attachments) ? input.attachments : []
+      if (inputText.trim().length > 0) lastDraftRef.current = { text: inputText, attachments: inputAttachments }
+      const session = typeof props.useSession === 'function' ? props.useSession((value) => value) : null
+      const pending = session && Array.isArray(session.pendingSubmissions) ? session.pendingSubmissions : []
+      if (pending.length > 0) {
+        const last = pending[pending.length - 1]
+        if (last && typeof last.text === 'string' && last.text.trim().length > 0) pendingRef.current = last
       }
-      document.addEventListener('input', (event) => {
-        if (isComposer(event.target)) draftGuard.text = (event.target.innerText || '').trim()
-      }, true)
-      document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter' || event.shiftKey || !isComposer(event.target)) return
-        remember(event.target)
-      }, true)
-      document.addEventListener('click', (event) => {
-        const button = event.target && event.target.closest ? event.target.closest('button') : null
-        if (button === null) return
-        const composer = document.querySelector('[contenteditable="true"]')
-        if (composer === null) return
-        const label = (button.getAttribute('aria-label') || button.getAttribute('title') || '').toLowerCase()
-        const rect = button.getBoundingClientRect()
-        const box = composer.getBoundingClientRect()
-        const near = rect.y >= box.y - 30 && rect.y <= box.bottom + 30 && rect.x >= box.right - 120
-        if (/发送|send/.test(label) || near) remember(composer)
-      }, true)
+      const promptError = session && session.promptError ? session.promptError : null
+      const errorText = promptError ? (promptError.message || String(promptError)) : ''
+      React.useEffect(() => {
+        if (!remote) {
+          if (recovery) setRecovery(sessionId, null)
+          return
+        }
+        const source = pendingRef.current || lastDraftRef.current
+        if (promptError && source) {
+          setRecovery(sessionId, {
+            text: source.text,
+            attachments: source.attachments || [],
+            error: errorText,
+          })
+        } else if (recovery) {
+          setRecovery(sessionId, null)
+          pendingRef.current = null
+          lastDraftRef.current = null
+        }
+      }, [sessionId, remote, promptError, errorText])
+      try {
+        window.__RD_RECOVERY_DEBUG__ = {
+          sessionId,
+          hasSession: session !== null,
+          pending: pending.length,
+          inputKeys: input === null ? null : Object.keys(input),
+          draftType: input === null ? null : typeof input.draft,
+          attachmentIds: input && Array.isArray(input.attachmentIds) ? input.attachmentIds.length : null,
+          remoteFound: remote !== null,
+          cwd: session && typeof session.cwd === 'string' ? session.cwd.slice(-70) : null,
+          error: errorText,
+          active: recovery !== null,
+        }
+      } catch { /* debug only */ }
+      if (!remote || !recovery) return null
+      const attachmentCount = (recovery.attachments || []).length
+      return h('div', { className: 'rd-recover' },
+        h('div', { className: 'rt' }, '⚠ 上一条消息发送失败'),
+        h('div', { className: 'rtext' }, recovery.text),
+        attachmentCount > 0
+          ? h('div', { className: 'rchips' },
+            h('span', { className: 'rd-chip' }, '附件 ' + attachmentCount + ' 个'),
+            h('span', { className: 'rd-chip' }, '会一并恢复'))
+          : null,
+        h('div', { className: 'ractions' },
+          h('button', {
+            className: 'rd-rbtn primary',
+            onClick: () => {
+              restoreRecovery(sessionId, props.inputActions)
+              pendingRef.current = null
+              lastDraftRef.current = null
+            },
+          }, '恢复消息'),
+          h('button', {
+            className: 'rd-rbtn ghost',
+            onClick: () => setRecovery(sessionId, null),
+          }, '忽略'),
+        ),
+        h('div', { className: 'rhint' }, '只在当前会话显示；恢复后文档引用可能需重新 @ 添加'),
+      )
     }
 
-    function HeaderPill({ sessionId }) {
+    function HeaderPill(props) {
+      const { sessionId } = props
       const remote = useRemote(sessionId)
-      const [draft, setDraft] = React.useState(draftGuard.text)
-      React.useEffect(() => {
-        const handler = () => setDraft(draftGuard.text)
-        draftSubs.add(handler)
-        return () => { draftSubs.delete(handler) }
-      }, [])
+      const recovery = useRecovery(sessionId)
       if (!remote) return null
       const host = (store.state && store.state.connections || []).find((row) => row.id === remote.connectionId)
       const status = host ? host.status : 'disconnected'
@@ -2450,11 +2528,11 @@ window.__ModuleLoader__.load({
         h(Icon, { name: 'server', size: 12 }),
         h('span', null, remote.host + ' · ' + (remote.folder || remote.title)),
         h(Icon, { name: 'chev', size: 11 }),
-        draft && Date.now() - draftGuard.at < 30 * 60 * 1000
+        recovery
           ? h('button', {
             className: 'rd-pill-restore',
-            title: '把上一次发送的内容填回输入框',
-            onClick: (event) => { event.stopPropagation(); restoreDraft() },
+            title: '恢复上一条发送失败的消息',
+            onClick: (event) => { event.stopPropagation(); restoreRecovery(sessionId, props.inputActions) },
           }, '恢复')
           : null,
       )
@@ -2465,7 +2543,6 @@ window.__ModuleLoader__.load({
     function apply(ctx) {
       ctxRef = ctx
       ensureStyle()
-      installDraftGuard()
       try {
         // Development affordances for the screenshot harness; removed in v0.9.0.
         window.__RD_STORE__ = store
@@ -2475,13 +2552,6 @@ window.__ModuleLoader__.load({
         }
         window.__RD_OPEN_CONSOLE__ = () => openConsole()
         window.__RD_CTX__ = ctx
-        window.__RD_DRAFT__ = draftGuard
-        window.__RD_SET_DRAFT__ = (value) => {
-          draftGuard.text = String(value || '')
-          draftGuard.at = Date.now()
-          notifyDraft()
-        }
-        window.__RD_RESTORE_DRAFT__ = restoreDraft
       } catch {
         /* not a page context */
       }
@@ -2550,6 +2620,9 @@ window.__ModuleLoader__.load({
       ))
       offs.push(ctx.slots.inject('sidebar.session.row.hover', () =>
         ctx.slots.register({ name: 'sidebar.session.row.hover', id: 'remote-deck-hover', order: 5 }, SessionHoverExtra),
+      ))
+      offs.push(ctx.slots.inject('conversation.input.dock', () =>
+        ctx.slots.register({ name: 'conversation.input.dock', id: 'remote-deck-recovery', order: 20 }, RecoveryDock),
       ))
       offs.push(ctx.slots.inject('conversation.session.header.utilities', () =>
         ctx.slots.register({ name: 'conversation.session.header.utilities', id: 'remote-deck-pill', order: -20 }, HeaderPill),
