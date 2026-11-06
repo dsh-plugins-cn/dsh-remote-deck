@@ -1200,7 +1200,7 @@ window.__ModuleLoader__.load({
             ),
             config === null
               ? (error
-                ? h('div', { className: 'rd-err' }, '读取 SSH 配置失败：' + error + '（可点「重新扫描」重试）')
+                ? h('div', { className: 'rd-err' }, friendlyText(error) + '（可点「重新扫描」重试）')
                 : h('div', { className: 'rd-hint' }, '正在读取 SSH 配置…'))
               : config.hosts.length === 0
                 ? h('div', { className: 'rd-hint' }, config.exists ? '配置里没有可导入的主机（通配符和 Match 会被跳过）。' : '没有找到 ~/.ssh/config，可以直接在右侧手动填写。')
@@ -1809,7 +1809,7 @@ window.__ModuleLoader__.load({
           h('button', { className: 'rd-termbtn', onClick: () => void open(), title: '重开终端' }, h(Icon, { name: 'refresh', size: 13 })),
         ),
         h('div', { className: 'rd-xterm', ref: boxRef }),
-        error ? h('div', { className: 'rd-termerror' }, error) : null,
+        error ? h('div', { className: 'rd-termerror' }, friendlyText(error)) : null,
         h('div', { className: 'rd-termfoot' },
           h('span', null, '完整终端（xterm.js）· 支持颜色、光标与全屏程序'),
           h('span', { style: { marginLeft: 'auto' } }, sessionId ? 'session ' + sessionId.slice(0, 8) : ''),
@@ -2004,7 +2004,7 @@ window.__ModuleLoader__.load({
           },
           onMouseDown: () => viewRef.current?.focus(),
         }, text.length === 0 ? h('span', { className: 'rd-termplaceholder' }, '正在打开远端 shell…') : text),
-        error ? h('div', { className: 'rd-termerror' }, error) : null,
+        error ? h('div', { className: 'rd-termerror' }, friendlyText(error)) : null,
         h('div', { className: 'rd-termfoot' },
           h('span', null, '点击终端后可直接输入 · 支持粘贴 · Ctrl+C 中断'),
           h('span', { style: { marginLeft: 'auto' } }, sessionId ? 'session ' + sessionId.slice(0, 8) : ''),
@@ -2133,7 +2133,7 @@ window.__ModuleLoader__.load({
       try {
         return FilePanelInner({ host })
       } catch (error) {
-        return h('div', { className: 'rd-err', style: { margin: '12px 0' } }, '文件面板出错：' + (error && error.message ? error.message : String(error)))
+        return h('div', { className: 'rd-err', style: { margin: '12px 0' } }, '文件面板出错：' + friendlyText(error && error.message ? error.message : error))
       }
     }
 

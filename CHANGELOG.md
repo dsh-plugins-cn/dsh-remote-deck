@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.2.6] - 2026-11-06
+
+### Changed
+
+- The remaining raw error surfaces (SSH config reader, both terminal panels, file-panel boundary)
+  now go through the same friendly error catalog. Client-only.
+
 ## [1.2.5] - 2026-11-06
 
 ### Changed
