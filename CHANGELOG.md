@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.2.7] - 2026-11-06
+
+### Changed
+
+- The SSH pill no longer prints the latency value; the connection dot and machine name remain, and
+  the latency stays available in the hover tooltip.
+- The quick panel moves up (bottom 58 → 76 px), aligns its left edge with the pill and narrows from
+  404 to 372 px. Its footer no longer repeats the latency. Layout, status strip, host cards and quick
+  actions keep the same design.
+
 ## [1.2.6] - 2026-11-06
 
 ### Changed

@@ -340,7 +340,7 @@ window.__ModuleLoader__.load({
       .rd-dot.err { background:#e5484d;box-shadow:0 0 0 3px rgba(229,72,77,.14) }
       .rd-dot.idle { background:#c3c8d0 }
 
-      .rd-panel { position:fixed;left:12px;bottom:58px;width:404px;max-height:640px;display:flex;flex-direction:column;
+      .rd-panel { position:fixed;left:8px;bottom:76px;width:370px;max-height:640px;display:flex;flex-direction:column;
         background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2329);
         border:1px solid var(--dsw-alias-border-l1,#e8e8ec);border-radius:14px;
         box-shadow:0 24px 60px rgba(16,24,40,.22),0 2px 6px rgba(16,24,40,.06);
@@ -731,7 +731,9 @@ window.__ModuleLoader__.load({
           type: 'button',
           className: 'rd-chip',
           'data-open': String(open),
-          title: connected.length > 0 ? connected.map((row) => row.name).join(', ') : '远程开发',
+          title: connected.length > 0
+            ? connected.map((row) => row.name).join(', ') + (latency ? ' · ' + latency : '')
+            : '远程开发',
           onClick: () => {
             store.open = !store.open
             if (store.open) void refresh()
@@ -740,8 +742,6 @@ window.__ModuleLoader__.load({
         },
           h(Dot, { state: !ready ? 'error' : connected.length > 0 ? 'connected' : 'disconnected' }),
           h('span', null, label),
-          latency ? h('span', { className: 'rd-dot', style: { background: 'transparent' } }) : null,
-          latency ? h('span', { style: { fontFamily: 'ui-monospace,Consolas,monospace', fontSize: 10, color: '#4c8f5c' } }, latency) : null,
           h(Icon, { name: 'chev', size: 12 }),
         ),
         h(Panel),
@@ -930,7 +930,6 @@ window.__ModuleLoader__.load({
           h(Dot, { state: first ? first.status : 'disconnected' }),
           h('span', null, first ? first.name : '未配置'),
           first && first.sys ? h('span', { className: 'mono' }, '· ' + first.sys.os + ' ' + shortKernel(first.sys.kernel)) : null,
-          first && first.latencyMs ? h('span', { className: 'mono' }, '· ' + first.latencyMs + 'ms') : null,
           h('span', { style: { marginLeft: 'auto' } }, state ? 'host ' + state.build : ''),
         ),
       )
