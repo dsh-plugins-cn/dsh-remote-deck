@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.2.5] - 2026-11-06
+
+### Changed
+
+- The console now uses the same notification system as the quick panel: a fixed-height status
+  strip (host connection state) plus the shared toast overlay. The raw `host.error` line above the
+  overview and the inline `store.notice` row are gone, so a failed connection no longer pushes the
+  console content down. The ports tab uses the friendly error catalog too.
+
 ## [1.2.4] - 2026-11-06
 
 ### Changed

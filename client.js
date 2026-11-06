@@ -533,6 +533,9 @@ window.__ModuleLoader__.load({
       .rd-toast .tt { font-weight: 600; color: var(--dsw-alias-label-primary, #1f2329); }
       .rd-toast .th { margin-top: 2px; color: var(--dsw-alias-label-secondary, #8f959e); line-height: 1.5; }
       .rd-toast .x { margin-left: auto; flex: none; border: 0; background: none; color: var(--dsw-alias-label-tertiary, #a3a8b0); cursor: pointer; font-size: 11px; }
+      .rd-console { position: relative; }
+      .rd-console .rd-toasts { left: auto; right: 18px; bottom: 18px; width: 320px; }
+      .rd-cpane > .rd-status { margin: 8px 0 10px; }
       [data-rd-theme="dark"] .rd-status { background: rgba(255,255,255,.05); }
       [data-rd-theme="dark"] .rd-status.bad { background: rgba(255,107,92,.12); color: #ff8f82; }
 
@@ -747,6 +750,20 @@ window.__ModuleLoader__.load({
       )
     }
 
+    function ToastStack() {
+      const toasts = useStore((s) => s.toasts || [])
+      if (toasts.length === 0) return null
+      return h('div', { className: 'rd-toasts' },
+        toasts.map((toast) => h('div', { key: toast.id, className: 'rd-toast ' + toast.level },
+          h('div', { className: 'tx' },
+            h('div', { className: 'tt' }, toast.title),
+            toast.hint ? h('div', { className: 'th' }, toast.hint) : null,
+          ),
+          h('button', { className: 'x', title: '关闭', onClick: () => dismissToast(toast.id) }, '✕'),
+        )),
+      )
+    }
+
     function Panel() {
       const open = useStore((s) => s.open)
       const ready = useStore((s) => s.ready)
@@ -756,7 +773,6 @@ window.__ModuleLoader__.load({
       const notice = useStore((s) => s.notice)
       const selectedHost = useStore((s) => s.selectedHost)
       const quickPins = useStore((s) => s.quickPins || [])
-      const toasts = useStore((s) => s.toasts || [])
       const panelRef = React.useRef(null)
 
       React.useEffect(() => {
@@ -910,15 +926,7 @@ window.__ModuleLoader__.load({
               h(Icon, { name: 'server', size: 14 }), '控制台'),
           ),
         ),
-        h('div', { className: 'rd-toasts' },
-          toasts.map((toast) => h('div', { key: toast.id, className: 'rd-toast ' + toast.level },
-            h('div', { className: 'tx' },
-              h('div', { className: 'tt' }, toast.title),
-              toast.hint ? h('div', { className: 'th' }, toast.hint) : null,
-            ),
-            h('button', { className: 'x', title: '关闭', onClick: () => dismissToast(toast.id) }, '✕'),
-          )),
-        ),
+        h(ToastStack),
         h('div', { className: 'rd-foot' },
           h(Dot, { state: first ? first.status : 'disconnected' }),
           h('span', null, first ? first.name : '未配置'),
@@ -2116,7 +2124,7 @@ window.__ModuleLoader__.load({
           h('input', { className: 'rd-input mono', style: { width: 120 }, placeholder: '本地端口（自动）', value: localPort, onChange: (event) => setLocalPort(event.target.value) }),
           h('button', { className: 'rd-btn primary', disabled: busy !== '' || !remotePort, onClick: () => void start(remotePort, localPort) }, '开启'),
         ),
-        error ? h('div', { className: 'rd-err', style: { marginTop: 10 } }, error) : null,
+        error ? h('div', { className: 'rd-err', style: { marginTop: 10 } }, friendlyText(error)) : null,
       )
     }
 
@@ -2294,6 +2302,7 @@ window.__ModuleLoader__.load({
       const hostWorkspaces = workspaces.filter((row) => row.connectionId === host.id && (!filter || (row.folder + ' ' + row.path).toLowerCase().includes(filter)))
       const hostSessions = sessionsForHost(host.id).filter((row) => !filter || (row.summary.displayTitle || '').toLowerCase().includes(filter))
       const color = colorOf(host.color)
+      const hostIssue = host.error ? friendlyError(host.error) : null
 
       const act = (action) => {
         void (async () => {
@@ -2394,8 +2403,12 @@ window.__ModuleLoader__.load({
                 onClick: () => { store.consoleTab = id; emit() },
               }, label)),
             ),
+            h('div', { className: 'rd-status' + (hostIssue ? ' bad' : '') },
+              h(Dot, { state: hostIssue ? 'error' : host.status }),
+              h('span', { className: 't', title: hostIssue ? (hostIssue.title + ' — ' + hostIssue.hint) : '' },
+                hostIssue ? hostIssue.title : (host.status === 'connected' ? '连接正常' : '未连接')),
+            ),
             tab === 'overview' ? null : (tab === 'terminal' ? h(TerminalPanel, { host }) : tab === 'files' ? h(FilePanel, { host }) : h(PortsPanel, { host })),
-            host.error ? h('div', { className: 'rd-err', style: { margin: '0 0 12px' } }, host.error) : null,
             h('div', { className: 'rd-overview', style: { display: tab === 'overview' ? 'contents' : 'none' } },
             h('div', { className: 'rd-chead' },
               h('span', { className: 'rd-cavatar', style: { background: color } }, h(Icon, { name: 'server', size: 24 })),
@@ -2492,10 +2505,10 @@ window.__ModuleLoader__.load({
                 )),
               ),
 
-            store.notice ? h('div', { className: 'rd-err', style: { marginTop: 12 } }, store.notice) : null,
             ),
           ),
         ),
+        h(ToastStack),
       )
     }
 
