@@ -38,7 +38,19 @@ window.__ModuleLoader__.load({
         init.headers['content-type'] = 'application/json'
         init.body = JSON.stringify(options.body)
       }
-      const response = await fetch('http://127.0.0.1:' + info.port + path, init)
+      const timeoutMs = options && typeof options.timeoutMs === 'number' ? options.timeoutMs : 60000
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), timeoutMs)
+      init.signal = controller.signal
+      let response
+      try {
+        response = await fetch('http://127.0.0.1:' + info.port + path, init)
+      } catch (failure) {
+        if (controller.signal.aborted) throw new Error('请求超时（' + Math.round(timeoutMs / 1000) + ' 秒），请重试')
+        throw failure
+      } finally {
+        clearTimeout(timer)
+      }
       const body = await response.json().catch(() => ({}))
       if (!response.ok || body.ok === false) throw new Error(body.message || 'HTTP ' + response.status)
       return body
@@ -57,6 +69,7 @@ window.__ModuleLoader__.load({
       notice: '',
       busy: '',
       selectedHost: '',
+      quickPins: [],
       listeners: new Set(),
       workspaces: { items: [] },
       sessions: { ids: [], byId: {} },
@@ -74,6 +87,47 @@ window.__ModuleLoader__.load({
     function useStore(selector) {
       return useSyncExternalStore(subscribe, () => selector(store))
     }
+
+    const QUICK_PINS_KEY = 'dsh.remote-deck.quick-pins'
+
+    function loadQuickPins() {
+      try {
+        const raw = globalThis.localStorage ? globalThis.localStorage.getItem(QUICK_PINS_KEY) : null
+        const list = raw ? JSON.parse(raw) : []
+        return Array.isArray(list) ? list.filter((id) => typeof id === 'string').slice(0, 3) : []
+      } catch {
+        return []
+      }
+    }
+
+    function saveQuickPins() {
+      try {
+        if (globalThis.localStorage) globalThis.localStorage.setItem(QUICK_PINS_KEY, JSON.stringify(store.quickPins))
+      } catch {
+        /* storage unavailable */
+      }
+    }
+
+    function isQuickPinned(connectionId) {
+      return store.quickPins.includes(connectionId)
+    }
+
+    function toggleQuickPin(connectionId) {
+      const next = store.quickPins.slice()
+      const index = next.indexOf(connectionId)
+      if (index >= 0) {
+        next.splice(index, 1)
+      } else {
+        if (next.length >= 3) return { ok: false, max: true }
+        next.push(connectionId)
+      }
+      store.quickPins = next
+      saveQuickPins()
+      emit()
+      return { ok: true }
+    }
+
+    store.quickPins = loadQuickPins()
 
     async function refresh() {
       if (boot() === null) {
@@ -391,6 +445,11 @@ window.__ModuleLoader__.load({
 
       .rd-newfolder { display: inline-flex; align-items: center; gap: 6px; }
       .rd-newfolder .rd-input { width: 150px; }
+      .rd-qpin { width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 6px; font-size: 13px; color: #c2c7cf; cursor: pointer; flex: none; }
+      .rd-qpin.on { color: #d97706; background: rgba(217,119,6,.12); }
+      .rd-qpin:hover { background: rgba(15,23,42,.06); }
+      .rd-pinhint { margin: 0 4px 6px; padding: 6px 8px; border-radius: 7px; background: rgba(210,153,34,.12); color: #9a5b00; font-size: 11px; line-height: 1.5; }
+      [data-rd-theme="dark"] .rd-pinhint { background: rgba(210,153,34,.18); color: #e3b341; }
       /* ---- failed-send recovery ---- */
       .rd-recover { margin: 0 0 10px; border: 1px solid #f0d9ae; background: #fffaf0; border-radius: 12px; padding: 10px 12px; }
       .rd-recover .rt { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #9a5b00; }
@@ -610,6 +669,7 @@ window.__ModuleLoader__.load({
       const busy = useStore((s) => s.busy)
       const notice = useStore((s) => s.notice)
       const selectedHost = useStore((s) => s.selectedHost)
+      const quickPins = useStore((s) => s.quickPins || [])
       const panelRef = React.useRef(null)
 
       React.useEffect(() => {
@@ -643,6 +703,11 @@ window.__ModuleLoader__.load({
       const connections = (state && state.connections) || []
       const workspaces = (state && state.workspaces) || []
       const connected = connections.filter((row) => row.status === 'connected')
+      const pinnedHosts = quickPins.map((id) => connections.find((row) => row.id === id)).filter(Boolean)
+      const hasPins = pinnedHosts.length > 0
+      const pinnedSet = new Set(pinnedHosts.map((row) => row.id))
+      const fillers = connections.filter((row) => !pinnedSet.has(row.id)).slice(0, Math.max(0, 3 - pinnedHosts.length))
+      const shownHosts = hasPins ? pinnedHosts.concat(fillers).slice(0, 3) : connections.slice(0, 5)
       const first = connected[0] || connections[0]
       const shownWorkspaces = workspaces.filter((row) => !selectedHost || row.connectionId === selectedHost)
 
@@ -699,7 +764,7 @@ window.__ModuleLoader__.load({
             ? h('div', { className: 'rd-hint' }, '还没有连接。添加一台 SSH 主机后，它的目录就能作为工作区。')
             : null,
           h('div', { className: 'rd-hosts' },
-            connections.slice(0, 5).map((row) => h('div', {
+            shownHosts.map((row) => h('div', {
               key: row.id,
               className: 'rd-host',
               'data-active': String(selectedHost === row.id),
@@ -727,8 +792,10 @@ window.__ModuleLoader__.load({
                 row.latencyMs ? h('span', { className: 'lat' }, row.latencyMs + 'ms') : null,
               ),
             )),
-            h('div', { className: 'rd-host add', onClick: () => openHostDialog() },
-              h(Icon, { name: 'plus', size: 13 }), '添加机器'),
+            hasPins && shownHosts.length >= 3
+              ? null
+              : h('div', { className: 'rd-host add', onClick: () => openHostDialog() },
+                h(Icon, { name: 'plus', size: 13 }), '添加机器'),
           ),
 
           h('div', { className: 'rd-sect' }, '快捷操作'),
@@ -817,22 +884,24 @@ window.__ModuleLoader__.load({
       const [error, setError] = React.useState('')
       const [tested, setTested] = React.useState(null)
 
-      React.useEffect(() => {
-        void (async () => {
-          try {
-            const result = await call('/ssh-config')
-            setConfig(result)
-            if (record === null) {
-              const existing = new Set(((state && state.connections) || []).map((row) => row.name))
-              const next = {}
-              for (const entry of result.hosts) next[entry.alias] = !existing.has(entry.alias)
-              setPicked(next)
-            }
-          } catch (failure) {
-            setError(failure instanceof Error ? failure.message : String(failure))
+      const loadConfig = React.useCallback(async () => {
+        setConfig(null)
+        setError('')
+        try {
+          const result = await call('/ssh-config', { timeoutMs: 10000 })
+          setConfig(result)
+          if (record === null) {
+            const existing = new Set(((state && state.connections) || []).map((row) => row.name))
+            const next = {}
+            for (const entry of result.hosts) next[entry.alias] = !existing.has(entry.alias)
+            setPicked(next)
           }
-        })()
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
       }, [])
+
+      React.useEffect(() => { void loadConfig() }, [loadConfig])
 
       const set = (patch) => setForm((current) => Object.assign({}, current, patch))
 
@@ -1011,10 +1080,12 @@ window.__ModuleLoader__.load({
             h('div', { className: 'rd-cfg' },
               h(Icon, { name: 'key', size: 12 }),
               h('span', { className: 'mono' }, config ? config.path || '~/.ssh/config' : '读取中…'),
-              h('span', { className: 'rd-link', style: { marginLeft: 'auto' }, onClick: () => { setConfig(null); setError(''); void (async () => { try { const result = await call('/ssh-config'); setConfig(result) } catch {} })() } }, '重新扫描'),
+              h('span', { className: 'rd-link', style: { marginLeft: 'auto' }, onClick: () => { void loadConfig() } }, '重新扫描'),
             ),
             config === null
-              ? h('div', { className: 'rd-hint' }, '正在读取 SSH 配置…')
+              ? (error
+                ? h('div', { className: 'rd-err' }, '读取 SSH 配置失败：' + error + '（可点「重新扫描」重试）')
+                : h('div', { className: 'rd-hint' }, '正在读取 SSH 配置…'))
               : config.hosts.length === 0
                 ? h('div', { className: 'rd-hint' }, config.exists ? '配置里没有可导入的主机（通配符和 Match 会被跳过）。' : '没有找到 ~/.ssh/config，可以直接在右侧手动填写。')
                 : h('div', { className: 'rd-import' },
@@ -2083,6 +2154,8 @@ window.__ModuleLoader__.load({
       const busy = useStore((s) => s.busy)
       const tab = useStore((s) => s.consoleTab || 'overview')
       const [query, setQuery] = React.useState('')
+      const quickPins = useStore((s) => s.quickPins || [])
+      const [pinHint, setPinHint] = React.useState('')
 
       const connections = (state && state.connections) || []
       const workspaces = (state && state.workspaces) || []
@@ -2165,6 +2238,18 @@ window.__ModuleLoader__.load({
           h('div', { className: 'rt2' },
             h(Dot, { state: row.status }),
             row.latencyMs ? h('span', { className: 'lat2' }, row.latencyMs + 'ms') : null,
+            h('span', {
+              className: 'rd-qpin' + (quickPins.includes(row.id) ? ' on' : ''),
+              title: quickPins.includes(row.id) ? '取消固定到快捷面板' : '固定到快捷面板（最多 3 台）',
+              onClick: (event) => {
+                event.stopPropagation()
+                const result = toggleQuickPin(row.id)
+                if (result.max) {
+                  setPinHint('快捷面板最多固定 3 台，请先取消一台')
+                  setTimeout(() => setPinHint(''), 2600)
+                }
+              },
+            }, '★'),
           ),
         )),
       )
@@ -2184,6 +2269,7 @@ window.__ModuleLoader__.load({
         ),
         h('div', { className: 'rd-cbody' },
           h('aside', { className: 'rd-rail2' },
+            pinHint ? h('div', { className: 'rd-pinhint' }, pinHint) : null,
             rail(connected.filter((row) => !filter || (row.name + ' ' + row.host + ' ' + row.username).toLowerCase().includes(filter)), '已连接'),
             connected.length > 0 ? h('div', { className: 'sep2' }) : null,
             rail(connections.filter((row) => row.status !== 'connected').filter((row) => !filter || (row.name + ' ' + row.host + ' ' + row.username).toLowerCase().includes(filter)), '未连接'),

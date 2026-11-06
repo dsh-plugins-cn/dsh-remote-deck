@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.2.3] - 2026-11-06
+
+### Added
+
+- Console machine rows get a **star** that pins a host to the quick panel. At most 3 hosts are
+  pinned, pin order is kept, unpinned hosts fill the remaining slots, and the list is stored in
+  `localStorage` (`dsh.remote-deck.quick-pins`). The quick panel itself gains no new controls,
+  labels or badges.
+
+### Fixed
+
+- A running `bash` command whose SSH connection closes is now rejected immediately with
+  `Connection closed; the running command was interrupted.` instead of leaving the turn waiting
+  forever. `disconnect()` rejects pending commands too.
+- `~/.ssh/config` reading has a 10 second timeout and a visible error plus the existing
+  `重新扫描` retry; other API calls default to a 60 second timeout.
+
 ## [1.2.2] - 2026-11-06
 
 ### Changed
