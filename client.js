@@ -70,6 +70,7 @@ window.__ModuleLoader__.load({
       busy: '',
       selectedHost: '',
       quickPins: [],
+      toasts: [],
       listeners: new Set(),
       workspaces: { items: [] },
       sessions: { ids: [], byId: {} },
@@ -128,6 +129,79 @@ window.__ModuleLoader__.load({
     }
 
     store.quickPins = loadQuickPins()
+
+    function friendlyError(raw) {
+      const message = raw instanceof Error ? raw.message : String(raw || '')
+      const lower = message.toLowerCase()
+      const make = (title, hint) => ({ level: 'error', title, hint, detail: message })
+      if (/failed to fetch|networkerror|load failed/.test(lower)) {
+        return make('Remote Deck 服务未连接', '请完全退出 DSH 后重新打开；如果刚更新插件，这一步会重新注入服务地址。')
+      }
+      if (/http 403|forbidden|token/.test(lower)) {
+        return make('插件服务令牌已过期', '刷新页面；仍失败则完全重启 DSH。')
+      }
+      if (/timed out while waiting for handshake|handshake.*timeout/.test(lower)) {
+        return make('SSH 连接超时', '主机可能已关机、IP/端口不对，或被防火墙拦截。')
+      }
+      if (/all configured authentication methods failed|permission denied|authentication failed/.test(lower)) {
+        return make('SSH 认证失败', '检查用户名、密钥或密码；新机器需要先在控制台配置密钥。')
+      }
+      if (/econnrefused|connection refused/.test(lower)) {
+        return make('SSH 端口未开放', '确认 sshd 已启动，端口号正确。')
+      }
+      if (/enotfound|getaddrinfo/.test(lower)) {
+        return make('主机名无法解析', '检查主机地址、DNS 或 /etc/hosts。')
+      }
+      if (/host key verification failed|host key mismatch/.test(lower)) {
+        return make('主机指纹不匹配', '确认这台机器可信后，更新 known_hosts。')
+      }
+      if (/connection closed|client is not connected|not connected/.test(lower)) {
+        return make('SSH 连接已断开', '点击重连后再试。')
+      }
+      if (/fs_not_found|no such file/.test(lower)) {
+        return make('文件不存在', '路径可能已变更，刷新目录后再试。')
+      }
+      if (/fs_access_denied|access denied/.test(lower)) {
+        return make('没有权限', '检查远端用户对该目录的权限。')
+      }
+      if (/timeout|超时/.test(lower)) {
+        return make('请求超时', '服务暂时无响应，请重试。')
+      }
+      return make('操作失败', '请重试；如果持续失败，展开详情查看原因。')
+    }
+
+    function friendlyText(raw) {
+      const info = friendlyError(raw)
+      return info.title + '：' + info.hint
+    }
+
+    let toastSeq = 0
+    const toastTimers = new Map()
+
+    function pushToast(raw) {
+      const info = friendlyError(raw)
+      const now = Date.now()
+      const first = store.toasts[0]
+      if (first && first.title === info.title && now - first.at < 2000) return
+      toastSeq += 1
+      const item = { id: toastSeq, at: now, level: info.level, title: info.title, hint: info.hint, detail: info.detail }
+      store.toasts = [item, ...store.toasts].slice(0, 2)
+      emit()
+      const timer = setTimeout(() => {
+        store.toasts = store.toasts.filter((toast) => toast.id !== item.id)
+        toastTimers.delete(item.id)
+        emit()
+      }, 5000)
+      toastTimers.set(item.id, timer)
+    }
+
+    function dismissToast(id) {
+      const timer = toastTimers.get(id)
+      if (timer !== undefined) clearTimeout(timer)
+      toastTimers.delete(id)
+      store.toasts = store.toasts.filter((toast) => toast.id !== id)
+      emit()
+    }
 
     async function refresh() {
       if (boot() === null) {
@@ -450,6 +524,18 @@ window.__ModuleLoader__.load({
       .rd-qpin:hover { background: rgba(15,23,42,.06); }
       .rd-pinhint { margin: 0 4px 6px; padding: 6px 8px; border-radius: 7px; background: rgba(210,153,34,.12); color: #9a5b00; font-size: 11px; line-height: 1.5; }
       [data-rd-theme="dark"] .rd-pinhint { background: rgba(210,153,34,.18); color: #e3b341; }
+      .rd-status { height: 26px; flex: none; margin: 0 14px 6px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 7px; background: rgba(15,23,42,.03); color: var(--dsw-alias-label-secondary, #8f959e); font-size: 10.5px; overflow: hidden; }
+      .rd-status .t { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .rd-status .retry { margin-left: auto; flex: none; color: inherit; cursor: pointer; text-decoration: underline; }
+      .rd-status.bad { background: rgba(180,35,24,.08); color: #b42318; }
+      .rd-toasts { position: absolute; left: 14px; right: 14px; bottom: 44px; display: flex; flex-direction: column-reverse; gap: 6px; pointer-events: none; z-index: 6; }
+      .rd-toast { pointer-events: auto; display: flex; align-items: flex-start; gap: 8px; background: var(--dsw-alias-bg-layer-1, #fff); border: 1px solid var(--dsw-alias-border-l1, #e8e8ec); border-left: 3px solid #b42318; border-radius: 8px; padding: 7px 9px; box-shadow: 0 8px 22px rgba(16,24,40,.16); font-size: 11px; }
+      .rd-toast .tt { font-weight: 600; color: var(--dsw-alias-label-primary, #1f2329); }
+      .rd-toast .th { margin-top: 2px; color: var(--dsw-alias-label-secondary, #8f959e); line-height: 1.5; }
+      .rd-toast .x { margin-left: auto; flex: none; border: 0; background: none; color: var(--dsw-alias-label-tertiary, #a3a8b0); cursor: pointer; font-size: 11px; }
+      [data-rd-theme="dark"] .rd-status { background: rgba(255,255,255,.05); }
+      [data-rd-theme="dark"] .rd-status.bad { background: rgba(255,107,92,.12); color: #ff8f82; }
+
       /* ---- failed-send recovery ---- */
       .rd-recover { margin: 0 0 10px; border: 1px solid #f0d9ae; background: #fffaf0; border-radius: 12px; padding: 10px 12px; }
       .rd-recover .rt { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #9a5b00; }
@@ -670,7 +756,15 @@ window.__ModuleLoader__.load({
       const notice = useStore((s) => s.notice)
       const selectedHost = useStore((s) => s.selectedHost)
       const quickPins = useStore((s) => s.quickPins || [])
+      const toasts = useStore((s) => s.toasts || [])
       const panelRef = React.useRef(null)
+
+      React.useEffect(() => {
+        if (!notice) return
+        pushToast(notice)
+        store.notice = ''
+        emit()
+      }, [notice])
 
       React.useEffect(() => {
         if (!open) return undefined
@@ -739,6 +833,7 @@ window.__ModuleLoader__.load({
         if (ui) ui.openWorkspace(item.workspaceId)
       }
 
+      const status = error ? friendlyError(error) : null
       return h('div', { className: 'rd-panel', ref: panelRef },
         h('div', { className: 'rd-head' },
           h('div', null,
@@ -753,13 +848,18 @@ window.__ModuleLoader__.load({
             h('button', { className: 'rd-ibtn', title: '关闭', onClick: () => { store.open = false; emit() } }, h(Icon, { name: 'x', size: 14 })),
           ),
         ),
+        h('div', { className: 'rd-status' + (status ? ' bad' : '') },
+          h(Dot, { state: status ? 'error' : connected.length > 0 ? 'connected' : 'disconnected' }),
+          h('span', { className: 't', title: status ? (status.title + ' — ' + status.hint) : '' },
+            status ? status.title : (connected.length > 0 ? '连接正常 · ' + connected.length + ' 台在线' : '未连接机器')),
+          status ? h('span', { className: 'retry', onClick: () => void refresh() }, '重试') : null,
+        ),
         h('div', { className: 'rd-body' },
           !ready
             ? h('div', { className: 'rd-notice' },
               h('b', { style: { display: 'block', marginBottom: 2 } }, '插件还没激活'),
               'DSH 需要重启一次才能加载 Remote Deck 的 host 部分。重启后这里会显示连接列表。')
             : null,
-          error ? h('div', { className: 'rd-err' }, error) : null,
           connections.length === 0 && ready
             ? h('div', { className: 'rd-hint' }, '还没有连接。添加一台 SSH 主机后，它的目录就能作为工作区。')
             : null,
@@ -789,7 +889,7 @@ window.__ModuleLoader__.load({
               ),
               h('div', { className: 'st' },
                 row.status === 'connected' ? '已连接' : row.status === 'connecting' ? '连接中…' : row.status === 'error' ? '连接失败' : '未连接',
-                row.latencyMs ? h('span', { className: 'lat' }, row.latencyMs + 'ms') : null,
+                row.status === 'connected' && row.latencyMs ? h('span', { className: 'lat' }, row.latencyMs + 'ms') : null,
               ),
             )),
             hasPins && shownHosts.length >= 3
@@ -810,7 +910,15 @@ window.__ModuleLoader__.load({
               h(Icon, { name: 'server', size: 14 }), '控制台'),
           ),
         ),
-        notice ? h('div', { style: { padding: '0 14px 6px' } }, h('div', { className: 'rd-err' }, notice)) : null,
+        h('div', { className: 'rd-toasts' },
+          toasts.map((toast) => h('div', { key: toast.id, className: 'rd-toast ' + toast.level },
+            h('div', { className: 'tx' },
+              h('div', { className: 'tt' }, toast.title),
+              toast.hint ? h('div', { className: 'th' }, toast.hint) : null,
+            ),
+            h('button', { className: 'x', title: '关闭', onClick: () => dismissToast(toast.id) }, '✕'),
+          )),
+        ),
         h('div', { className: 'rd-foot' },
           h(Dot, { state: first ? first.status : 'disconnected' }),
           h('span', null, first ? first.name : '未配置'),
@@ -1054,7 +1162,7 @@ window.__ModuleLoader__.load({
             h('span', { className: 'mono' }, (tested.sys ? tested.sys.os + ' ' + shortKernel(tested.sys.kernel) + ' · ' : '') + (tested.latencyMs ? tested.latencyMs + 'ms' : '') + (tested.sys && tested.sys.shell ? ' · ' + tested.sys.shell : '')),
             h('span', { className: 'rd-link', style: { marginLeft: 'auto' }, onClick: test }, '再测一次'))
           : null,
-        error ? h('div', { className: 'rd-err' }, error) : null,
+        error ? h('div', { className: 'rd-err' }, friendlyText(error)) : null,
         h('div', { className: 'rd-mfoot3' },
           h('button', { className: 'rd-btn', disabled: busy !== '', onClick: test }, busy === 'test' ? '测试中…' : '测试连接'),
           h('div', { style: { marginLeft: 'auto', display: 'flex', gap: 8 } },
@@ -1264,7 +1372,7 @@ window.__ModuleLoader__.load({
         ),
         h('button', { className: 'rd-btn primary rd-wsadd', disabled: busy !== '' || !host || targetPath.length === 0, onClick: add },
           busy === 'add' ? '添加中…' : '添加工作区'),
-        error ? h('div', { className: 'rd-err', style: { marginTop: 8 } }, error) : null,
+        error ? h('div', { className: 'rd-err', style: { marginTop: 8 } }, friendlyText(error)) : null,
         h('div', { className: 'rd-wsdivider' }),
         h('div', { className: 'rd-formhint', style: { margin: '0 0 6px' } }, '已在 ' + (host ? host.name : '') + ' 的工作区 · ' + existing.length),
         existing.length === 0
@@ -2111,7 +2219,7 @@ window.__ModuleLoader__.load({
           hostWorkspaces.map((row) => h('button', { key: row.workspaceId || row.path, className: 'rd-fchip', onClick: () => void load(row.path) }, row.folder || row.title || row.path)),
         ) : null,
         notice ? h('div', { className: 'rd-fnotice' }, notice) : null,
-        error ? h('div', { className: 'rd-err' }, error) : null,
+        error ? h('div', { className: 'rd-err' }, friendlyText(error)) : null,
         loading ? h('div', { className: 'rd-empty', style: { padding: '20px' } }, '正在读取远程目录…') : null,
         !loading && !error && visible.length === 0 ? h('div', { className: 'rd-empty', style: { padding: '20px' } }, '这个目录是空的。') : null,
         !loading && visible.length > 0 ? h('div', { className: 'rd-flist' },
@@ -2237,7 +2345,7 @@ window.__ModuleLoader__.load({
           ),
           h('div', { className: 'rt2' },
             h(Dot, { state: row.status }),
-            row.latencyMs ? h('span', { className: 'lat2' }, row.latencyMs + 'ms') : null,
+            row.status === 'connected' && row.latencyMs ? h('span', { className: 'lat2' }, row.latencyMs + 'ms') : null,
             h('span', {
               className: 'rd-qpin' + (quickPins.includes(row.id) ? ' on' : ''),
               title: quickPins.includes(row.id) ? '取消固定到快捷面板' : '固定到快捷面板（最多 3 台）',

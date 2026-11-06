@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.2.4] - 2026-11-06
+
+### Changed
+
+- The quick panel now has one **fixed 26 px status strip** (service/connection state + retry) and a
+  **transient toast overlay** for action failures. The two inline error rows are gone, so showing
+  errors no longer changes the panel height; any combination of status and toasts keeps the same
+  layout.
+- Errors are translated through one catalog before display (service offline/token, SSH timeout,
+  authentication, refused port, DNS, host key, connection closed, file missing/permission). The
+  raw message stays in the toast/status tooltip; dialogs use the same friendly one-liner.
+
+### Added
+
+- Toasts auto-dismiss after 5 seconds, keep at most two, dedupe the same title within 2 seconds and
+  can be closed manually.
+
+### Fixed
+
+- Disconnected hosts no longer show a stale latency value.
+
 ## [1.2.3] - 2026-11-06
 
 ### Added
