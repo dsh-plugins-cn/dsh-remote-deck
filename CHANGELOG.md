@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.2.2] - 2026-11-06
+
+### Changed
+
+- The sidebar's SSH quick panel no longer renders a per-host "recent workspaces" block. The
+  block made the panel grow and shrink when switching hosts; the workspace list stays reachable
+  from the console. Client-only change.
+
 ## [1.2.1] - 2026-11-06
 
 ### Fixed

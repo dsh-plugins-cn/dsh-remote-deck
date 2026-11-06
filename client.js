@@ -731,25 +731,6 @@ window.__ModuleLoader__.load({
               h(Icon, { name: 'plus', size: 13 }), '添加机器'),
           ),
 
-          shownWorkspaces.length > 0
-            ? h(React.Fragment, null,
-              h('div', { className: 'rd-sect' }, '最近工作区' + (selectedHost ? ' · ' + ((connections.find((row) => row.id === selectedHost) || {}).name || '') : ''),
-                h('span', { className: 'r', onClick: () => openConsole(first ? first.id : undefined) }, '控制台 ›')),
-              shownWorkspaces.slice(0, 3).map((row) => {
-                const item = (store.workspaces.items || []).find((entry) => samePath(entry.path, row.stub))
-                const count = item && item.sessionIds ? item.sessionIds.length : 0
-                return h('div', { key: row.stub, className: 'rd-ws', onClick: () => openWorkspace(row) },
-                  h('span', { className: 'fi', style: { background: colorOf(row.color) + '1a', color: colorOf(row.color) } }, h(Icon, { name: 'folder', size: 14 })),
-                  h('div', { style: { minWidth: 0 } },
-                    h('div', { className: 'nm' }, row.folder || row.title),
-                    h('div', { className: 'pa' }, row.path),
-                  ),
-                  h('div', { className: 'rt' }, h('b', null, count + ' 个会话'), h('br'), ago(item && item.updatedAt)),
-                )
-              }),
-            )
-            : null,
-
           h('div', { className: 'rd-sect' }, '快捷操作'),
           h('div', { className: 'rd-quick' },
             h('button', { className: 'rd-qa', onClick: () => openWorkspaceDialog(first ? first.id : undefined) },
