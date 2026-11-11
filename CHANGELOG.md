@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.3.4] - 2026-11-11
+
+### Fixed
+
+- A remote Session's path guard no longer blocks switching back to the local
+  machine. The guard applied whenever the working directory was POSIX, so after
+  `cd /` (the local drive root) a local Windows path was rejected with
+  `FS_REMOTE_ONLY_PATH`. It now applies only when the working directory is
+  inside a registered remote workspace; a POSIX cwd outside every workspace
+  keeps local path semantics. Remote workspaces still reject Windows/backslash
+  escapes.
+
 ## [1.3.3] - 2026-11-11
 
 ### Fixed
