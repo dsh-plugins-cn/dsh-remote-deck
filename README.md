@@ -184,3 +184,7 @@ recorded in the CHANGELOG. The version plan is in [ROADMAP.md](ROADMAP.md), rele
 ## License
 
 MIT
+
+## Release policy
+
+See [RELEASE-POLICY.md](./RELEASE-POLICY.md): batch fixes, test before publishing, and use semantic versions (patch = bugfix, minor = capability).
