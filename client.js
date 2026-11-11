@@ -1631,6 +1631,38 @@ window.__ModuleLoader__.load({
       return typeof value === 'string' && (/^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\'))
     }
 
+    function downloadNameFor(target) {
+      const parts = String(target || '').split(/[\\/]/)
+      return parts[parts.length - 1] || 'download'
+    }
+
+    async function saveDownload(url, name) {
+      const desktop = globalThis.dshDesktop
+      if (desktop !== null && typeof desktop === 'object') {
+        const bridge = desktop.fileActions
+        if (bridge !== null && typeof bridge === 'object' && typeof bridge.save === 'function') {
+          return await bridge.save({ url, mode: 'download', name })
+        }
+        // Older desktop builds have no fileActions bridge; keep the previous
+        // browser behavior but report it so the caller can explain the fallback.
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = name || 'download'
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        return { status: 'browser-fallback' }
+      }
+      // Web build: keep the existing browser download behavior.
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = name || 'download'
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      return { status: 'requested' }
+    }
+
     function downloadUrlFor(connectionId, target) {
       const info = boot()
       if (info === null) return ''
@@ -2220,13 +2252,17 @@ window.__ModuleLoader__.load({
         const info = boot()
         if (info === null) return
         const url = apiBase() + '/connections/' + host.id + '/download?path=' + encodeURIComponent(entry.path) + '&token=' + encodeURIComponent(info.token)
-        const anchor = document.createElement('a')
-        anchor.href = url
-        anchor.download = entry.name
-        document.body.appendChild(anchor)
-        anchor.click()
-        anchor.remove()
-        setNotice('已开始下载 ' + entry.name)
+        setError('')
+        setNotice('')
+        try {
+          const result = await saveDownload(url, entry.name)
+          if (result && result.status === 'saved') setNotice('已保存到 ' + result.path)
+          else if (result && result.status === 'cancelled') setNotice('已取消下载')
+          else if (result && result.status === 'browser-fallback') setNotice('当前桌面版本不支持应用内下载，已使用浏览器下载 ' + entry.name)
+          else setNotice('已开始下载 ' + entry.name)
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
       }
 
       async function saveLocal(entry) {
@@ -2632,32 +2668,35 @@ window.__ModuleLoader__.load({
 
     function PreviewDownloadAction(props) {
       const remote = useRemote(props.sessionId)
+      const [downloadStatus, setDownloadStatus] = React.useState('')
       if (!remote || !props.absolutePath) return null
       const target = String(props.absolutePath)
       const info = boot()
       if (info === null) return null
-      const download = () => {
+      const download = async () => {
         const href = downloadUrlFor(remote.connectionId, target)
         if (href.length === 0) return
-        const anchor = document.createElement('a')
-        anchor.href = href
-        anchor.download = target.split('/').pop() || 'download'
-        document.body.appendChild(anchor)
-        anchor.click()
-        anchor.remove()
+        setDownloadStatus('下载中…')
+        try {
+          const result = await saveDownload(href, downloadNameFor(target))
+          setDownloadStatus(result && result.status === 'saved' ? '已保存到本机' : result && result.status === 'cancelled' ? '已取消下载' : '已开始下载')
+        } catch (failure) {
+          setDownloadStatus('下载失败')
+        }
       }
       return h('button', {
         type: 'button',
         className: 'rd-dl',
-        title: '下载到本机：' + target,
+        title: downloadStatus || ('下载到本机：' + target),
         'aria-label': '下载到本机',
-        onClick: download,
+        onClick: () => void download(),
       }, h(Icon, { name: 'download', size: 16 }))
     }
 
     function DeliverableDownloadAction(props) {
       const remote = useRemote(props.sessionId)
       const wrapRef = React.useRef(null)
+      const [downloadStatus, setDownloadStatus] = React.useState('')
       if (!remote) return null
       const resolveTarget = () => {
         const card = wrapRef.current && wrapRef.current.closest ? wrapRef.current.closest('[data-presented-file]') : null
@@ -2675,27 +2714,28 @@ window.__ModuleLoader__.load({
         const match = label.match(/\/[^\s"']+/)
         return match === null ? '' : match[0]
       }
-      const download = () => {
+      const download = async () => {
         const target = resolveTarget()
         if (target.length === 0) return
         const info = boot()
         if (info === null) return
         const href = downloadUrlFor(remote.connectionId, target)
         if (href.length === 0) return
-        const anchorEl = document.createElement('a')
-        anchorEl.href = href
-        anchorEl.download = target.split('/').pop() || 'download'
-        document.body.appendChild(anchorEl)
-        anchorEl.click()
-        anchorEl.remove()
+        setDownloadStatus('下载中…')
+        try {
+          const result = await saveDownload(href, downloadNameFor(target))
+          setDownloadStatus(result && result.status === 'saved' ? '已保存到本机' : result && result.status === 'cancelled' ? '已取消下载' : '已开始下载')
+        } catch (failure) {
+          setDownloadStatus('下载失败')
+        }
       }
       return h('span', { ref: wrapRef, className: 'rd-dl-wrap' },
         h('button', {
           type: 'button',
           className: 'rd-dl',
-          title: '下载到本机',
+          title: downloadStatus || '下载到本机',
           'aria-label': '下载到本机',
-          onClick: download,
+          onClick: () => void download(),
         }, h(Icon, { name: 'download', size: 16 })),
       )
     }

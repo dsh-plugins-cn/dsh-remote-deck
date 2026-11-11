@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.4.2] - 2026-11-11
+
+### Fixed
+
+- File downloads now use the DSH desktop native save bridge
+  (`window.dshDesktop.fileActions.save({ url, mode: 'download', name })`)
+  instead of anchoring the browser to the plugin loopback URL. The old
+  cross-origin anchor triggered the desktop window's external-navigation policy
+  (`shell.openExternal`), so the system browser opened a download instead of
+  keeping it in DSH. This covers the file panel, preview download, and
+  deliverable download; remote and local (DSH_HOME) URLs both use the same
+  bridge. `save-local` / "本地显示" is unchanged, and the Web build keeps its
+  existing browser download fallback.
+
 ## [1.4.1] - 2026-11-11
 
 ### Fixed
