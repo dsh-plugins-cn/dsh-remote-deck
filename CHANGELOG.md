@@ -49,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chunks no longer turn into replacement characters. (Review P2)
 - The unit suite resolves its own directory and loads the vendored ssh2 copy, so it runs from a
   fresh clone/CI without an extra dependency. (Review P1)
+- The supervised pid file is kept while background children still share the process group
+  (`sleep 30 & `), so a later `job_kill` can still terminate them; stale pid files older than
+  3 hours are swept on the next command. (Live acceptance finding)
 
 ## [1.2.8] - 2026-11-11
 
