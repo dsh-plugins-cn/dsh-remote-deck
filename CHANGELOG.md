@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.3.2] - 2026-11-11
+
+### Fixed
+
+- Keep the SFTP operation deadline timer referenced. An unref'd timer let the
+  event loop drain before it fired in short-lived processes/Linux CI, turning a
+  pending call into a cancelled test (and, in production, a promise that could
+  never settle). The 1.3.1 tag was never released; use 1.3.2.
+
 ## [1.3.1] - 2026-11-11
 
 ### Fixed
