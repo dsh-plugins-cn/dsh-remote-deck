@@ -256,7 +256,7 @@ test('U16 supervised script keeps the pid file while background children remain'
   const script = buildSupervisedScript('sleep 30 &', null, '/tmp/.dsh-remote-deck/abc.pid')
   assert.match(script, /jobs -p/)
   assert.match(script, /if \[ -z "\$\(jobs -p 2>\/dev\/null\)" \]; then/)
-  assert.match(script, /find \/tmp\/\.dsh-remote-deck -name '\*\.pid' -mmin \+180 -delete/)
+  assert.match(script, /find \/tmp\/\.dsh-remote-deck -maxdepth 1 -name '\*\.pid' -mmin \+180 -delete/)
 })
 
 test('U14 startCommand decodes a multibyte character split across chunks', async () => {

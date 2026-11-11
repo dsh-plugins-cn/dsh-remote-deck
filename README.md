@@ -138,6 +138,15 @@ the host; the terminal is one PTY channel; forwarding is one local listener per 
 
 ## Security
 
+- Remote commands run on the SSH host outside the local DSH sandbox/approval layer; the remote
+  account is the execution boundary. Pin the host key with `hostKeyFingerprint` on the connection
+  record and use a restricted account for untrusted repositories.
+- `apply_patch` is not supported on remote workspaces yet; use `edit`/`write`.
+- A local session keeps full local access; a remote session rejects Windows/backslash path escapes
+  with `FS_REMOTE_ONLY_PATH` (DSH-owned paths stay local).
+- The loopback API reflects CORS only for local DSH origins and restricts `/local/download` to
+  registered workspaces, Remote Deck data and attachments.
+
 - Passwords and key passphrases live in the DSH credential store, never in `connections.json`.
 - The browser half talks to the host over a loopback HTTP server guarded by a per-session token.
 - The terminal and forwarding endpoints are behind the same token.

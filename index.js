@@ -28,7 +28,7 @@ const DATA_DIR = join(DSH_HOME, 'remote-deck')
 const LEGACY_DIR = join(DSH_HOME, 'remote-ssh')
 const WORKSPACE_ROOT = join(DATA_DIR, 'workspaces')
 const LEGACY_WORKSPACE_ROOT = join(LEGACY_DIR, 'workspaces')
-const BUILD = '1.3.0'
+const BUILD = '1.3.1'
 const diagnostics = { pid: process.pid, ssh2: 'pending', ssh2Error: '', checkedAt: 0 }
 void ssh2SelfTest().then((result) => {
   diagnostics.ssh2 = result.ok ? 'ok' : 'failed'
@@ -377,7 +377,24 @@ export function apply(ctx) {
       }
     },
   }
-  ctx.tools.register(bashToolConfiguration)
+  try {
+    ctx.tools.register(bashToolConfiguration)
+  } catch (error) {
+    // POSIX compositions already register the official bash tool; a duplicate
+    // name throws and used to abort the whole plugin load. Fall back to a
+    // remote-only tool name instead of failing the composition.
+    const message = errorText(error)
+    debug('bash tool registration failed:', message)
+    try {
+      ctx.tools.register({
+        ...bashToolConfiguration,
+        name: 'remote_bash',
+        description: `${bashToolConfiguration.description} (remote-only tool; the official bash tool is already registered on this platform)`,
+      })
+    } catch (fallbackError) {
+      debug('remote bash fallback registration failed:', errorText(fallbackError))
+    }
+  }
 
   // --- ripgrep on the connected host ---------------------------------------
   const subprocessService = ctx.get('subprocess')
@@ -439,11 +456,22 @@ export function apply(ctx) {
     }
   }
 
+  const dropHost = (id) => {
+    const host = hosts.get(id)
+    hosts.delete(id)
+    try {
+      host?.dispose()
+    } catch {
+      /* ignore */
+    }
+  }
+
   const server = createApi({
     token,
     store,
     secrets,
     hostFor,
+    dropHost,
     listHosts,
     routing,
     getRegistry: () => ctx.get('workspaceRegistry'),

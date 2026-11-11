@@ -125,6 +125,14 @@ POSIX 路径。落在标记目录下的路径走 SFTP；命令走带远端 cwd �
 
 ## 安全
 
+- 远端命令在 SSH 主机上执行，不经过本地 DSH 沙箱/审批层；远端账号就是执行边界。对不可信仓库请
+  在连接记录里固定 `hostKeyFingerprint`，并使用受限账号。
+- 远端工作区暂不支持 `apply_patch`，请用 `edit`/`write`。
+- 本地会话保留本机访问；远程会话会拒绝 Windows/反斜杠路径逃逸（`FS_REMOTE_ONLY_PATH`），
+  DSH 自有路径仍走本地。
+- 本地回环 API 只对本地 DSH 源反射 CORS；`/local/download` 限定在工作区、Remote Deck 数据与
+  attachments 目录。
+
 - 密码、私钥口令存 DSH 凭据库，不写进 `connections.json`。
 - 浏览器半通过带回环 token 的本地 HTTP 与 host 通信；终端与转发接口同样受 token 保护。
 - 移除工作区只取消本地注册，插件从不删除远端文件。

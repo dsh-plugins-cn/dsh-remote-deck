@@ -11,6 +11,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.3.1] - 2026-11-11
+
+### Fixed
+
+- **P0: a failed SSH handshake no longer crashes the whole DSH host.** ssh2 emits a second
+  `error` while tearing down a timed-out/aborted handshake; a single `once()` listener left it
+  unhandled, and the host treated that uncaught exception as fatal. The client now keeps an error
+  listener for its whole lifetime, closes during handshake reject cleanly, and the SFTP failure
+  path no longer leaks a live socket.
+- **P0: local `write`/`edit` keep their sandbox policy.** The fs wrappers dropped the fifth
+  `sandboxPolicy` argument when delegating to the local provider, so a remote-Session write could
+  bypass the session's read-only/workspace preset on desktop. Local passthrough now forwards every
+  argument.
+- **P0: remote mutating fs methods are complete.** `patchText`, `deleteFile`, `moveFile` and
+  `processPath` are wrapped: remote `deleteFile`/`moveFile` use SFTP (move prefers the
+  posix-rename extension), remote `apply_patch` fails explicitly instead of touching the local
+  machine, and remote `processPath` displays the remote path.
+- **P0: the remote `bash` tool no longer prevents plugin load on POSIX.** Where the official
+  `bash` tool is already registered, a duplicate registration aborted the composition; it now falls
+  back to a `remote_bash` tool name instead of failing to load.
+- Remote file overwrites and edits work on OpenSSH again: writes prefer the posix-rename extension,
+  then a plain rename, then an in-place write (plain rename refuses to overwrite an existing target).
+- `readByteRange` reads only the requested window instead of downloading the whole file (file
+  drag/preview no longer becomes O(n²)), honors the abort signal, and respects the file size.
+- Remote ripgrep honors the caller's output cap and reports real `lossy` truncation; abort kills the
+  remote process, and the command has a deadline.
+- Absolute POSIX paths outside a workspace root resolve to the remote Session's host instead of the
+  local Windows drive (`/tmp` no longer becomes `E:\tmp`); local/Windows path escapes from a
+  remote Session are rejected with `FS_REMOTE_ONLY_PATH` (DSH-owned paths stay local).
+- SFTP calls, the handshake probe and killPid have finite deadlines; a half-dead socket can no
+  longer hang a filesystem tool (and the whole turn) forever.
+- Editing a connection's host/port/user/auth/key or secret now disconnects and reconnects it, so the
+  next command runs on the edited machine.
+- JSON reads tolerate a UTF-8 BOM (a BOM-prefixed marker/connection file used to read as empty and be
+  overwritten on the next save).
+- Deleting a connection disposes its live host object, forwards stop their established sockets,
+  terminals free their replay buffer after exit, and the terminal SSE stream uses a separate UTF-8
+  decoder from terminal bytes.
+- The loopback API reflects CORS only for local DSH origins; `/local/download` is limited to
+  registered workspaces, `remote-deck` data and attachments instead of all of `DSH_HOME`.
+- Pinned host keys are verified when `hostKeyFingerprint` is present on a connection record
+  (otherwise ssh2's default acceptance still applies).
+- Remote `bash` job pid files live in a 0700 directory and stale files are swept only for the
+  current user.
+
+### Known limits (documented in README)
+
+- Remote commands intentionally run outside the local DSH sandbox/approval layer; the remote host
+  is the execution boundary. Use the connection's host-key pinning and a restricted SSH account.
+- `apply_patch` is not supported for remote targets yet (edit/write are).
+- The terminal is plugin-owned rather than the official terminal service; sessions therefore do not
+  participate in official terminal lifecycle events yet.
+
 ## [1.3.0] - 2026-11-11
 
 ### Added
