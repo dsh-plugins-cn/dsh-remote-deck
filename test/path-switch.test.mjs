@@ -20,8 +20,11 @@ test('a POSIX cwd outside every remote workspace keeps local path semantics', ()
     assert.equal(routing.resolveTarget('E:\\ai-workspace\\Deepseek Harness', '/'), null)
     assert.equal(routing.resolveTarget('/tmp/x', '/'), null)
     assert.equal(routing.resolveTarget('E:\\x', '/'), null)
-    // Inside a real remote workspace the guard still refuses local paths.
-    assert.throws(() => routing.resolveTarget('C:\\Users\\001\\.ssh\\id_rsa', '/data/ws'), /FS_REMOTE_ONLY_PATH|POSIX/)
+    // Inside a remote workspace, an explicit Windows path still means the
+    // local machine (remote development needs local resources), while POSIX
+    // paths stay on the remote host.
+    assert.equal(routing.resolveTarget('C:\\Users\\001\\.ssh\\id_rsa', '/data/ws'), null)
+    assert.deepEqual(routing.resolveTarget('/tmp/x', '/data/ws'), { connectionId: 'conn1', path: '/tmp/x' })
   } finally {
     rmSync(workspaceRoot, { recursive: true, force: true })
   }

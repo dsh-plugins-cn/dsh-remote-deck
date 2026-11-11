@@ -128,8 +128,9 @@ POSIX 路径。落在标记目录下的路径走 SFTP；命令走带远端 cwd �
 - 远端命令在 SSH 主机上执行，不经过本地 DSH 沙箱/审批层；远端账号就是执行边界。对不可信仓库请
   在连接记录里固定 `hostKeyFingerprint`，并使用受限账号。
 - 远端工作区暂不支持 `apply_patch`，请用 `edit`/`write`。
-- 本地会话保留本机访问；远程会话会拒绝 Windows/反斜杠路径逃逸（`FS_REMOTE_ONLY_PATH`），
-  DSH 自有路径仍走本地。
+- 远程会话把 POSIX 路径路由到 SSH 主机、把盘符/反斜杠路径（`C:\\...`、`E:\\...`）
+  路由到本机，远程开发仍然可以使用 Windows 本机文件与资源；两边都可访问，请留意来自
+  遥测/远端内容的路径指令。
 - 本地回环 API 只对本地 DSH 源反射 CORS；`/local/download` 限定在工作区、Remote Deck 数据与
   attachments 目录。
 

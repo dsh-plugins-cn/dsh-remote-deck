@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.4.0] - 2026-11-11
+
+### Changed
+
+- Remote development can use local Windows resources again. A remote Session
+  routes POSIX paths (absolute or relative) to the SSH host, including paths
+  that leave the workspace (/tmp, /var, ...), while drive/backslash paths
+  (`C:\\...`, `E:\\...`) explicitly resolve to the local machine. The previous
+  path guard that rejected local paths inside a remote Session was removed; it
+  broke the normal workflow of editing remotely while using local Windows
+  files/resources.
+- `/local/download` uses the original DSH_HOME root again (the earlier
+  workspace/remote-deck/attachments narrowing removed legitimate files).
+- README security note updated: both worlds are intentionally reachable from a
+  remote Session; review remote-sourced content before letting it touch local
+  paths.
+
 ## [1.3.4] - 2026-11-11
 
 ### Fixed

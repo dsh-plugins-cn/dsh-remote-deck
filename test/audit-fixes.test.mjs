@@ -39,16 +39,16 @@ test('renderBashResult does not fake an exit code beside a transport error', () 
   assert.doesNotMatch(rendered.text, /\[exit code:/)
 })
 
-test('remote Sessions reject local/Windows path escapes but keep relative POSIX paths', () => {
+test('remote Sessions keep both remote POSIX and local Windows routing', () => {
   const workspaceRoot = mkdtempSync(join(tmpdir(), 'deck-guard-'))
   try {
     const stub = join(workspaceRoot, 'conn1', 'ws-slug')
     mkdirSync(stub, { recursive: true })
     writeFileSync(join(stub, '.dsh-remote.json'), JSON.stringify({ version: 1, connectionId: 'conn1', path: '/data/ws', host: 'dev-box' }))
     const routing = new Routing({ workspaceRoot, legacyRoots: [], hostFor: () => undefined })
-    assert.throws(() => routing.resolveTarget('C:\\Users\\001\\.ssh\\id_rsa', '/data/ws'), /FS_REMOTE_ONLY_PATH|POSIX/)
-    assert.throws(() => routing.resolveTarget('..\\..\\secret.txt', '/data/ws'), /FS_REMOTE_ONLY_PATH|POSIX/)
-    assert.throws(() => routing.resolveTarget('../../etc/passwd', '/data/ws'), /escapes the remote workspace/)
+    assert.equal(routing.resolveTarget('C:\\Users\\001\\.ssh\\id_rsa', '/data/ws'), null)
+    assert.equal(routing.resolveTarget('..\\..\\secret.txt', '/data/ws'), null)
+    assert.deepEqual(routing.resolveTarget('../../etc/passwd', '/data/ws'), { connectionId: 'conn1', path: '/etc/passwd' })
     assert.deepEqual(routing.resolveTarget('sub/file.txt', '/data/ws'), { connectionId: 'conn1', path: '/data/ws/sub/file.txt' })
     assert.deepEqual(routing.resolveTarget('/tmp/x', '/data/ws'), { connectionId: 'conn1', path: '/tmp/x' })
   } finally {
