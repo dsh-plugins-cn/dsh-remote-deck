@@ -32,6 +32,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profiles without a job controller fall back to the previous foreground behaviour with an
   explicit notice; nothing hangs.
 
+### Fixed
+
+- The supervised command tail is newline-separated instead of appended with `; __rc=$?`, so
+  commands ending with `&`, a trailing newline, an empty string, or a comment no longer break the
+  wrapper or leak the pid file. (Review P0)
+- Job outcomes keep the terminal state: a killed command settles as `killed` with its signal, and a
+  completed command carries `exit code: N` in `job_output`/`job_list` instead of a bare
+  `completed`. (Review P1)
+- Stopping a foreground call now waits for the kill to settle and removes the job record, so no
+  late completion notice or stale `job_list` entry follows a Stop. (Review P1)
+- Degrading to a foreground run happens only when the profile has no job controller, and is
+  bounded by the foreground timeout; `run_in_background` without jobs fails with a clear error
+  instead of blocking. Other job preflight failures surface as errors. (Review P1)
+- Remote chunk decoding uses a UTF-8 string decoder, so multibyte characters split across SSH
+  chunks no longer turn into replacement characters. (Review P2)
+- The unit suite resolves its own directory and loads the vendored ssh2 copy, so it runs from a
+  fresh clone/CI without an extra dependency. (Review P1)
+
 ## [1.2.8] - 2026-11-11
 
 ### Fixed

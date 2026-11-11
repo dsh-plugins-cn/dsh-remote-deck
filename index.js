@@ -124,6 +124,43 @@ export function apply(ctx) {
   ctx.effect(() => () => restoreFs(), 'remote-deck: fs patch')
 
   // --- bash tool ------------------------------------------------------------
+  /**
+   * Bounded foreground execution used only when the profile exposes no job
+   * controller (or the job preflight rejects the call). The deadline closes
+   * the channel instead of leaving the turn waiting forever; the remote
+   * process may continue, which the notice states explicitly.
+   */
+  const runForegroundWithDeadline = async (host, cwd, exec, timeoutMs, command) => {
+    const controller = new AbortController()
+    let timedOut = false
+    const forwardAbort = () => controller.abort()
+    if (exec.signal !== undefined) {
+      if (exec.signal.aborted === true) controller.abort()
+      else exec.signal.addEventListener('abort', forwardAbort, { once: true })
+    }
+    const timer = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, timeoutMs)
+    timer.unref?.()
+    try {
+      const result = await host.runCommand(command, cwd, {
+        signal: controller.signal,
+        maxBytes: BASH_CONFIG.maxOutputBytes,
+      })
+      if (timedOut === true) {
+        return {
+          text: `[command still running after ${timeoutMs}ms; background jobs are unavailable in this profile, so it may keep running on the remote host]`,
+          exitCode: null,
+        }
+      }
+      return renderBashResult(result, { maxBytes: BASH_CONFIG.maxOutputBytes })
+    } finally {
+      clearTimeout(timer)
+      if (exec.signal !== undefined) exec.signal.removeEventListener('abort', forwardAbort)
+    }
+  }
+
   // Every call registers a DSH background job, waits a bounded time in the
   // foreground, and on timeout returns the job id instead of killing the
   // remote process. This mirrors @deepseek-ai/dsh-tool-bash: long legitimate
@@ -176,17 +213,19 @@ export function apply(ctx) {
         if (exec.signal !== undefined && exec.signal.aborted === true) {
           return { text: 'Error: tool call aborted', exitCode: 1 }
         }
-        const jobs = ctx.get('jobs')
-        if (jobs === undefined) {
-          const result = await host.runCommand(args.command, resolved.cwd, {
-            signal: exec.signal,
-            maxBytes: BASH_CONFIG.maxOutputBytes,
-          })
-          return renderBashResult(result, { maxBytes: BASH_CONFIG.maxOutputBytes })
-        }
-        const owner = exec.agent?.id
         const timeoutMs = clampTimeoutMs(args.timeoutMs)
         const background = args.run_in_background === true
+        const jobs = ctx.get('jobs')
+        if (jobs === undefined) {
+          if (background === true) {
+            return {
+              text: 'Error: run_in_background requires the DSH background-jobs capability (load @deepseek-ai/dsh-tool-jobs in this profile).',
+              exitCode: 1,
+            }
+          }
+          return await runForegroundWithDeadline(host, resolved.cwd, exec, timeoutMs, args.command)
+        }
+        const owner = exec.agent?.id
         const jobKey = randomUUID().replaceAll('-', '').slice(0, 16)
         const startedAt = Date.now()
         let commandResultPromise = null
@@ -231,8 +270,16 @@ export function apply(ctx) {
               const done = commandResultPromise.then(
                 (result) => {
                   clearInterval(timer)
-                  const failed = typeof result.transportError === 'string' && result.transportError.length > 0
-                  return failed ? { status: 'failed', detail: result.transportError } : { status: 'completed' }
+                  if (typeof result.transportError === 'string' && result.transportError.length > 0) {
+                    return { status: 'failed', detail: result.transportError }
+                  }
+                  if (pendingKill !== null || (typeof result.signal === 'string' && result.signal.length > 0)) {
+                    return {
+                      status: 'killed',
+                      detail: pendingKill !== null ? pendingKill : `signal: ${result.signal}`,
+                    }
+                  }
+                  return { status: 'completed', detail: `exit code: ${result.code}` }
                 },
                 (error) => {
                   clearInterval(timer)
@@ -249,12 +296,15 @@ export function apply(ctx) {
             },
           })
         } catch (jobError) {
-          const result = await host.runCommand(args.command, resolved.cwd, {
-            signal: exec.signal,
-            maxBytes: BASH_CONFIG.maxOutputBytes,
-          })
-          const rendered = renderBashResult(result, { maxBytes: BASH_CONFIG.maxOutputBytes })
-          const notice = `[background jobs unavailable: ${errorText(jobError)}]`
+          const message = errorText(jobError)
+          if (!/job controller|jobs unavailable|no job controller/i.test(message)) {
+            return { text: `Error: ${message}`, exitCode: 1 }
+          }
+          if (background === true) {
+            return { text: `Error: run_in_background is unavailable in this profile: ${message}`, exitCode: 1 }
+          }
+          const rendered = await runForegroundWithDeadline(host, resolved.cwd, exec, timeoutMs, args.command)
+          const notice = `[background jobs unavailable: ${message}]`
           return { ...rendered, text: `${notice}\n${rendered.text}`.trimEnd() }
         }
         if (background === true) {
@@ -267,11 +317,29 @@ export function apply(ctx) {
         let view
         try {
           view = await jobs.wait(jobId, timeoutMs, owner, exec.signal)
-        } catch {
+        } catch (waitError) {
+          if (exec.signal === undefined || exec.signal.aborted !== true) {
+            try {
+              jobs.kill(jobId, owner, 'wait failed')
+            } catch {
+              /* already settled */
+            }
+            return { text: `Error: ${errorText(waitError)}`, exitCode: null, jobId }
+          }
           try {
             jobs.kill(jobId, owner, 'tool call aborted')
           } catch {
             /* already settled */
+          }
+          try {
+            await jobs.wait(jobId, 5000, owner)
+          } catch {
+            /* settlement takes longer; the record stays */
+          }
+          try {
+            jobs.remove(jobId, owner)
+          } catch {
+            /* not settled/removable yet */
           }
           return { text: 'Error: tool call aborted', exitCode: null, jobId }
         }
@@ -287,7 +355,17 @@ export function apply(ctx) {
             }
           }
         }
-        const result = commandResultPromise === null ? null : await commandResultPromise
+        let result = null
+        try {
+          result = commandResultPromise === null ? null : await commandResultPromise
+        } catch (starterError) {
+          try {
+            jobs.remove(jobId, owner)
+          } catch {
+            /* keep the record when removal is not allowed */
+          }
+          return { text: errorText(starterError), exitCode: 1, jobId }
+        }
         try {
           jobs.remove(jobId, owner)
         } catch {

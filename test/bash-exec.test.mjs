@@ -1,12 +1,15 @@
 ﻿import assert from 'node:assert/strict'
 import { generateKeyPairSync } from 'node:crypto'
+import { createRequire } from 'node:module'
 import { after, before, test } from 'node:test'
-import ssh2 from 'ssh2'
-import { pathToFileURL } from 'node:url'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const root = 'C:/Users/001/Documents/dsh-plugins/dsh-remote-deck'
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const requireFromPlugin = createRequire(pathToFileURL(`${root}/lib/connection.js`))
+const ssh2 = requireFromPlugin('../vendor/node_modules/ssh2/lib/index.js')
 const { RemoteHost, buildCommandScript, buildSupervisedScript } = await import(pathToFileURL(`${root}/lib/connection.js`).href)
-const { resolveWorkdir, renderBashResult } = await import(pathToFileURL(`${root}/lib/bash-result.js`).href)
+const { resolveWorkdir, renderBashResult, renderPromoted } = await import(pathToFileURL(`${root}/lib/bash-result.js`).href)
 
 const CAP = 4096
 const calls = []
@@ -44,6 +47,15 @@ function handleExec(stream, command) {
   if (command.includes('__mock_noexit__')) {
     stream.write('no-exit-status\n')
     stream.end()
+    return
+  }
+  if (command.includes('__mock_utf8_split__')) {
+    stream.write(Buffer.from([0xc3]))
+    setTimeout(() => {
+      stream.write(Buffer.from([0xa9]))
+      stream.exit(0)
+      stream.end()
+    }, 30)
     return
   }
   if (command.includes('kill -TERM')) {
@@ -111,7 +123,7 @@ test('U1 buildCommandScript is strict about the working directory', () => {
   assert.equal(buildCommandScript('echo hi', null), 'echo hi')
 })
 
-test('U8 resolveWorkdir handles absolute/relative/invalid workdirs', () => {
+test('U12 resolveWorkdir handles absolute/relative/invalid workdirs', () => {
   assert.deepEqual(resolveWorkdir(undefined, '/data/ws'), { cwd: '/data/ws' })
   assert.deepEqual(resolveWorkdir('/tmp', '/data/ws'), { cwd: '/tmp' })
   assert.deepEqual(resolveWorkdir('sub/dir', '/data/ws/'), { cwd: '/data/ws/sub/dir' })
@@ -213,8 +225,7 @@ test('U10 killPid sends TERM and KILL for the recorded pid', async () => {
   assert.match(killCall.command, /kill -KILL/)
 })
 
-test('U11 renderPromoted reports live output and the job pointer', async () => {
-  const { renderPromoted } = await import('file:///C:/Users/001/Documents/dsh-plugins/dsh-remote-deck/lib/bash-result.js')
+test('U11 renderPromoted reports live output and the job pointer', () => {
   const rendered = renderPromoted(
     { chunks: [{ text: 'out-1\n' }, { text: 'err-1\n', channel: 'stderr' }], lossy: true },
     'bash-abc123',
@@ -226,4 +237,32 @@ test('U11 renderPromoted reports live output and the job pointer', async () => {
   assert.match(rendered.text, /\[stderr\]/)
   assert.match(rendered.text, /dropped from memory/)
   assert.match(rendered.text, /still running after 600000ms/)
+})
+
+
+test('U13 supervised script keeps trailing separators out of the user command', () => {
+  const script = buildSupervisedScript('sleep 30 &', null, '/tmp/.dsh-remote-deck/abc.pid')
+  assert.ok(script.includes('sleep 30 &\n__rc=$?'), 'background command is newline-terminated')
+  assert.doesNotMatch(script, /&;/)
+  const commented = buildSupervisedScript('echo hi # comment', null, '/tmp/.dsh-remote-deck/abc.pid')
+  assert.ok(commented.includes('# comment\n__rc=$?'), 'cleanup survives a trailing comment')
+  const empty = buildSupervisedScript('', null, '/tmp/.dsh-remote-deck/abc.pid')
+  assert.ok(empty.includes('\n__rc=$?\n'), 'empty command still has a valid tail')
+  const trailing = buildSupervisedScript('echo hi\n', null, '/tmp/.dsh-remote-deck/abc.pid')
+  assert.ok(trailing.includes('echo hi\n\n__rc=$?'), 'trailing newline does not create an empty statement')
+})
+
+test('U14 startCommand decodes a multibyte character split across chunks', async () => {
+  const chunks = []
+  const handle = await host.startCommand('__mock_utf8_split__', null, {
+    onChunk: (channel, text) => chunks.push(text),
+  })
+  const result = await handle.done
+  assert.equal(result.code, 0)
+  assert.equal(chunks.join(''), 'é')
+})
+
+test('U15 resolveWorkdir rejects home-relative workdirs', () => {
+  assert.ok(resolveWorkdir('~/src', '/data/ws').error)
+  assert.ok(resolveWorkdir('~', '/data/ws').error)
 })
