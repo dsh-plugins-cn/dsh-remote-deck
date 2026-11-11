@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.3.3] - 2026-11-11
+
+### Fixed
+
+- Restore desktop access to the loopback API. 1.3.2 narrowed CORS to loopback
+  HTTP(S) origins, but the desktop app serves its page from the custom
+  `dsh-app://app` scheme, so every plugin fetch was blocked and the panel showed
+  "Remote Deck 服务未连接 / 插件还没激活" even though the host was running. The
+  `dsh-app:` scheme is now accepted again (the per-session token still guards
+  every route); loopback HTTP(S) stays allowed and unknown web origins stay
+  blocked.
+
 ## [1.3.2] - 2026-11-11
 
 ### Fixed
