@@ -11,6 +11,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.3.0] - 2026-11-11
+
+### Added
+
+- Remote `bash` now registers every command as a DSH background job. A foreground wait (default
+  10 minutes, env `DSH_REMOTE_DECK_FOREGROUND_TIMEOUT_MS`, model `timeoutMs` overrides) returns a
+  job id instead of killing a long command; `job_output`, `job_list` and `job_kill` keep working
+  through the built-in job tools.
+- `run_in_background: true` returns a job id immediately (servers, long acceptance runs).
+- `job_kill` / the Stop button now signal the recorded remote pid (TERM, grace, KILL) instead of
+  only closing the SSH channel.
+- Job lifecycle events record the originating tool call, so archiving or stopping a Session also
+  stops the jobs it owns.
+
+### Changed
+
+- The bash tool schema gains `timeoutMs` and `run_in_background`; its result gains an optional
+  `jobId` and allows `exitCode: null` for background/promoted results.
+- Profiles without a job controller fall back to the previous foreground behaviour with an
+  explicit notice; nothing hangs.
+
+## [1.2.8] - 2026-11-11
+
+### Fixed
+
+- Remote `bash` no longer hangs when a command waits for stdin. The exec channel's stdin is
+  ended immediately, so a prompting command (for example `psql` without `PGPASSWORD`) fails
+  fast with its own error instead of blocking the whole turn forever.
+- A missing remote working directory is now a hard error. The old wrapper silently fell back to
+  the home directory (`cd … || cd ~`), which could run stateful commands (git, file edits) in the
+  wrong place.
+- Relative `workdir` values resolve against the session workspace instead of being ignored;
+  Windows-style paths are rejected with a clear message.
+- Oversized output is flagged with `[output truncated; first N bytes captured]` instead of being
+  dropped silently, and the captured text is capped exactly at the configured limit.
+- Transport failures, signals and missing exit statuses are reported with explicit markers
+  (`[transport error: …]`, `[killed by signal: …]`) so a genuine failure is no longer confused
+  with a normal non-zero exit code.
+
 ## [1.2.7] - 2026-11-06
 
 ### Changed
