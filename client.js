@@ -203,6 +203,28 @@ window.__ModuleLoader__.load({
       emit()
     }
 
+    let downloadToastTimer = null
+
+    /** Download feedback that also works outside the Remote Deck panel. */
+    function showDownloadToast(text, level) {
+      try {
+        let element = document.getElementById('rd-download-toast')
+        if (element === null) {
+          element = document.createElement('div')
+          element.id = 'rd-download-toast'
+          document.body.appendChild(element)
+        }
+        element.textContent = String(text || '')
+        element.className = 'rd-download-toast show' + (level === 'error' ? ' error' : '')
+        if (downloadToastTimer !== null) clearTimeout(downloadToastTimer)
+        downloadToastTimer = setTimeout(() => {
+          element.className = 'rd-download-toast' + (level === 'error' ? ' error' : '')
+        }, 6000)
+      } catch {
+        /* page not ready */
+      }
+    }
+
     async function refresh() {
       if (boot() === null) {
         store.ready = false
@@ -535,6 +557,9 @@ window.__ModuleLoader__.load({
       .rd-toast .x { margin-left: auto; flex: none; border: 0; background: none; color: var(--dsw-alias-label-tertiary, #a3a8b0); cursor: pointer; font-size: 11px; }
       .rd-console { position: relative; }
       .rd-console .rd-toasts { left: auto; right: 18px; bottom: 18px; width: 320px; }
+.rd-download-toast { position: fixed; right: 18px; bottom: 18px; z-index: 9999; max-width: min(460px, calc(100vw - 36px)); padding: 10px 13px; border-radius: 9px; border: 1px solid var(--dsw-alias-border-l1, #e8e8ec); background: var(--dsw-alias-bg-layer-1, #fff); color: var(--dsw-alias-label-primary, #1f2329); box-shadow: 0 8px 28px rgba(0,0,0,.18); font-size: 12px; line-height: 1.5; word-break: break-all; opacity: 0; transform: translateY(6px); transition: opacity .16s ease, transform .16s ease; pointer-events: none; }
+.rd-download-toast.show { opacity: 1; transform: translateY(0); }
+.rd-download-toast.error { border-color: #dc2626; color: #b91c1c; }
       .rd-cpane > .rd-status { margin: 8px 0 10px; }
       [data-rd-theme="dark"] .rd-status { background: rgba(255,255,255,.05); }
       [data-rd-theme="dark"] .rd-status.bad { background: rgba(255,107,92,.12); color: #ff8f82; }
@@ -1636,12 +1661,12 @@ window.__ModuleLoader__.load({
       return parts[parts.length - 1] || 'download'
     }
 
-    async function saveDownload(url, name) {
+    async function saveDownload(url, name, mode = 'saveAs') {
       const desktop = globalThis.dshDesktop
       if (desktop !== null && typeof desktop === 'object') {
         const bridge = desktop.fileActions
         if (bridge !== null && typeof bridge === 'object' && typeof bridge.save === 'function') {
-          return await bridge.save({ url, mode: 'download', name })
+          return await bridge.save({ url, mode, name })
         }
         // Older desktop builds have no fileActions bridge; keep the previous
         // browser behavior but report it so the caller can explain the fallback.
@@ -2205,6 +2230,7 @@ window.__ModuleLoader__.load({
       const [page, setPage] = React.useState({ total: 0, offset: 0, limit: 500, hasMore: false })
       const [loading, setLoading] = React.useState(false)
       const [loadingMore, setLoadingMore] = React.useState(false)
+      const [downloading, setDownloading] = React.useState('')
       const [error, setError] = React.useState('')
       const [filter, setFilter] = React.useState('')
       const [notice, setNotice] = React.useState('')
@@ -2249,19 +2275,35 @@ window.__ModuleLoader__.load({
       }, [host.id])
 
       async function download(entry) {
+        if (downloading === entry.path) return
         const info = boot()
         if (info === null) return
         const url = apiBase() + '/connections/' + host.id + '/download?path=' + encodeURIComponent(entry.path) + '&token=' + encodeURIComponent(info.token)
         setError('')
         setNotice('')
+        setDownloading(entry.path)
+        showDownloadToast('请选择保存位置：' + entry.name)
         try {
           const result = await saveDownload(url, entry.name)
-          if (result && result.status === 'saved') setNotice('已保存到 ' + result.path)
-          else if (result && result.status === 'cancelled') setNotice('已取消下载')
-          else if (result && result.status === 'browser-fallback') setNotice('当前桌面版本不支持应用内下载，已使用浏览器下载 ' + entry.name)
-          else setNotice('已开始下载 ' + entry.name)
+          if (result && result.status === 'saved') {
+            setNotice('已保存到 ' + result.path)
+            showDownloadToast('已保存到 ' + result.path)
+          } else if (result && result.status === 'cancelled') {
+            setNotice('已取消保存')
+            showDownloadToast('已取消保存')
+          } else if (result && result.status === 'browser-fallback') {
+            setNotice('当前桌面版本不支持应用内下载，已使用浏览器下载 ' + entry.name)
+            showDownloadToast('当前桌面版本不支持应用内下载，已使用浏览器下载', 'error')
+          } else {
+            setNotice('已开始下载 ' + entry.name)
+            showDownloadToast('已开始下载 ' + entry.name)
+          }
         } catch (failure) {
-          setError(failure instanceof Error ? failure.message : String(failure))
+          const message = failure instanceof Error ? failure.message : String(failure)
+          setError(message)
+          showDownloadToast('下载失败：' + message, 'error')
+        } finally {
+          setDownloading('')
         }
       }
 
@@ -2324,8 +2366,9 @@ window.__ModuleLoader__.load({
             h('span', { className: 'rd-factions' },
               entry.type === 'dir' ? null : h('button', {
                 className: 'rd-btn sm',
+                disabled: downloading === entry.path,
                 onClick: (event) => { event.stopPropagation(); void download(entry) },
-              }, '下载'),
+              }, downloading === entry.path ? '下载中…' : '下载'),
               entry.type === 'dir' ? null : h('button', {
                 className: 'rd-btn sm',
                 onClick: (event) => { event.stopPropagation(); void saveLocal(entry) },
@@ -2674,14 +2717,27 @@ window.__ModuleLoader__.load({
       const info = boot()
       if (info === null) return null
       const download = async () => {
+        if (downloadStatus === '选择位置…') return
         const href = downloadUrlFor(remote.connectionId, target)
         if (href.length === 0) return
-        setDownloadStatus('下载中…')
+        const name = downloadNameFor(target)
+        setDownloadStatus('选择位置…')
+        showDownloadToast('请选择保存位置：' + name)
         try {
-          const result = await saveDownload(href, downloadNameFor(target))
-          setDownloadStatus(result && result.status === 'saved' ? '已保存到本机' : result && result.status === 'cancelled' ? '已取消下载' : '已开始下载')
+          const result = await saveDownload(href, name)
+          if (result && result.status === 'saved') {
+            setDownloadStatus('已保存到本机')
+            showDownloadToast('已保存到 ' + result.path)
+          } else if (result && result.status === 'cancelled') {
+            setDownloadStatus('已取消保存')
+            showDownloadToast('已取消保存')
+          } else {
+            setDownloadStatus('已开始下载')
+            showDownloadToast('已开始下载 ' + name)
+          }
         } catch (failure) {
           setDownloadStatus('下载失败')
+          showDownloadToast('下载失败：' + (failure instanceof Error ? failure.message : String(failure)), 'error')
         }
       }
       return h('button', {
@@ -2689,6 +2745,7 @@ window.__ModuleLoader__.load({
         className: 'rd-dl',
         title: downloadStatus || ('下载到本机：' + target),
         'aria-label': '下载到本机',
+        disabled: downloadStatus === '选择位置…',
         onClick: () => void download(),
       }, h(Icon, { name: 'download', size: 16 }))
     }
@@ -2715,18 +2772,31 @@ window.__ModuleLoader__.load({
         return match === null ? '' : match[0]
       }
       const download = async () => {
+        if (downloadStatus === '选择位置…') return
         const target = resolveTarget()
         if (target.length === 0) return
         const info = boot()
         if (info === null) return
         const href = downloadUrlFor(remote.connectionId, target)
         if (href.length === 0) return
-        setDownloadStatus('下载中…')
+        const name = downloadNameFor(target)
+        setDownloadStatus('选择位置…')
+        showDownloadToast('请选择保存位置：' + name)
         try {
-          const result = await saveDownload(href, downloadNameFor(target))
-          setDownloadStatus(result && result.status === 'saved' ? '已保存到本机' : result && result.status === 'cancelled' ? '已取消下载' : '已开始下载')
+          const result = await saveDownload(href, name)
+          if (result && result.status === 'saved') {
+            setDownloadStatus('已保存到本机')
+            showDownloadToast('已保存到 ' + result.path)
+          } else if (result && result.status === 'cancelled') {
+            setDownloadStatus('已取消保存')
+            showDownloadToast('已取消保存')
+          } else {
+            setDownloadStatus('已开始下载')
+            showDownloadToast('已开始下载 ' + name)
+          }
         } catch (failure) {
           setDownloadStatus('下载失败')
+          showDownloadToast('下载失败：' + (failure instanceof Error ? failure.message : String(failure)), 'error')
         }
       }
       return h('span', { ref: wrapRef, className: 'rd-dl-wrap' },
@@ -2735,6 +2805,7 @@ window.__ModuleLoader__.load({
           className: 'rd-dl',
           title: downloadStatus || '下载到本机',
           'aria-label': '下载到本机',
+          disabled: downloadStatus === '选择位置…',
           onClick: () => void download(),
         }, h(Icon, { name: 'download', size: 16 })),
       )

@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.4.3] - 2026-11-11
+
+### Fixed
+
+- Download buttons now open the DSH native save-as dialog
+  (`fileActions.save({ url, mode: 'saveAs', name })`), so the user chooses the
+  destination instead of files silently landing in the system Downloads folder.
+  1.4.2 used `mode: 'download'`: it saved successfully, but offered no location
+  choice and no visible result outside the Remote Deck panel, so repeated clicks
+  produced duplicate copies. All three download entry points now show
+  "请选择保存位置", then "已保存到 <path>" / "已取消保存" / failure in a fixed
+  global toast, and stay disabled while the dialog is open. Web still uses its
+  browser download fallback; `save-local` / "本地显示" is unchanged.
+
 ## [1.4.2] - 2026-11-11
 
 ### Fixed
