@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.4.1] - 2026-11-11
+
+### Fixed
+
+- A disconnected remote Session no longer aborts the next turn while the prompt
+  is assembled. The desktop working-directory service stats the session cwd
+  before every request; when SSH is down the routing layer now returns the last
+  known stat (or a degraded directory marker for a known workspace) instead of
+  throwing, so the model can start a turn and the actual tool reports the clear
+  connection error. A cached stat also avoids repeated SSH round-trips.
+- Creating a remote workspace no longer writes `AGENTS.md` into the remote
+  repository by default; it is an explicit opt-in in the workspace dialog.
+
+### Changed
+
+- `/dirs` and `/files` understand `offset`/`limit` and return
+  `total`/`hasMore`; the workspace picker and file panel load 500 entries at a
+  time with a "load more" action instead of rendering an entire large directory.
+  Calls without paging parameters keep the previous first-page response shape.
+- Port scan polling and the main state refresh are serialized: a slow request no
+  longer overlaps the next 8s tick.
+- The client debug globals (`__RD_CTX__`, `__RD_STORE__`, `__RD_OPEN_*`) are
+  only exposed when the host runs with `DSH_REMOTE_DECK_DEBUG=1`; normal sessions
+  no longer leak the client context to page scripts.
+
 ## [1.4.0] - 2026-11-11
 
 ### Changed

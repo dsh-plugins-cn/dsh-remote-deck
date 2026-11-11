@@ -1246,7 +1246,7 @@ window.__ModuleLoader__.load({
       const [selected, setSelected] = React.useState('')
       const [title, setTitle] = React.useState('')
       const [titleEdited, setTitleEdited] = React.useState(false)
-      const [writeGuide, setWriteGuide] = React.useState(true)
+      const [writeGuide, setWriteGuide] = React.useState(false)
       const [openAfter, setOpenAfter] = React.useState(true)
       const [busy, setBusy] = React.useState('')
       const [error, setError] = React.useState('')
@@ -1258,19 +1258,23 @@ window.__ModuleLoader__.load({
       const existing = ((state && state.workspaces) || []).filter((row) => host && row.connectionId === host.id)
       const targetPath = ((pathInput.trim() || (listing && listing.path) || '').replace(/\/+$/, '')) || '/'
 
-      const load = React.useCallback(async (target, hostRow) => {
+      const load = React.useCallback(async (target, hostRow, offset = 0, append = false) => {
         if (!hostRow) return
-        setBusy('dirs')
+        setBusy(append ? 'more' : 'dirs')
         setError('')
         try {
           if (hostRow.status !== 'connected') {
             await call('/connections/' + hostRow.id + '/action', { method: 'POST', body: { action: 'connect' } })
             await refresh()
           }
-          const result = await call('/connections/' + hostRow.id + '/dirs?path=' + encodeURIComponent(target || '~'))
-          setListing(result)
-          setPathInput(result.path)
-          setSelected('')
+          const result = await call('/connections/' + hostRow.id + '/dirs?path=' + encodeURIComponent(target || '~') + '&offset=' + offset + '&limit=500')
+          setListing((previous) => append && previous !== null
+            ? { ...result, dirs: [...(previous.dirs || []), ...(result.dirs || [])] }
+            : result)
+          if (!append) {
+            setPathInput(result.path)
+            setSelected('')
+          }
         } catch (failure) {
           setError(failure instanceof Error ? failure.message : String(failure))
         }
@@ -1318,6 +1322,11 @@ window.__ModuleLoader__.load({
       }
 
       const enter = (dir) => { setSelected(dir.path); void load(dir.path, host) }
+
+      const loadMore = () => {
+        if (!listing || listing.hasMore !== true) return
+        void load(listing.path, host, Number(listing.offset) + Number(listing.limit), true)
+      }
 
       const add = () => {
         void (async () => {
@@ -1372,7 +1381,7 @@ window.__ModuleLoader__.load({
         })),
         field('远程路径', h('div', { className: 'rd-wspath mono' }, targetPath || '—')),
         h('div', { style: { marginTop: 10 } },
-          toggleSwitch('写入 AGENTS.md', '告诉模型这里在远程机器上，路径用 POSIX', writeGuide, setWriteGuide),
+          toggleSwitch('写入 AGENTS.md', '可选：告诉模型这里在远程机器上，路径用 POSIX（默认不写）', writeGuide, setWriteGuide),
           toggleSwitch('创建后打开新会话', '直接进入该工作区的对话', openAfter, setOpenAfter),
         ),
         h('button', { className: 'rd-btn primary rd-wsadd', disabled: busy !== '' || !host || targetPath.length === 0, onClick: add },
@@ -1477,19 +1486,26 @@ window.__ModuleLoader__.load({
                 ? h('div', { className: 'rd-wsrow' }, h('span', { className: 'rd-formhint' }, '正在读取目录…'))
                 : dirs.length === 0
                   ? h('div', { className: 'rd-wsrow' }, h('span', { className: 'rd-formhint' }, filter ? '没有匹配的目录' : '（空目录）'))
-                  : dirs.map((dir) => h('div', {
-                    key: dir.path,
-                    className: 'rd-wsrow2' + (selected === dir.path ? ' sel' : ''),
-                    onClick: () => setSelected(dir.path),
-                    onDoubleClick: () => enter(dir),
-                  },
-                    h('div', { className: 'nm4' },
-                      h(Icon, { name: 'folder', size: 13, style: { color: '#c1a06a' } }),
-                      h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, dir.name),
-                    ),
-                    h('span', { className: 'dim2' }, dir.mtime ? ago(dir.mtime) : ''),
-                    h('span', { className: 'dim2' }, '目录'),
-                  )),
+                  : [
+                    ...dirs.map((dir) => h('div', {
+                      key: dir.path,
+                      className: 'rd-wsrow2' + (selected === dir.path ? ' sel' : ''),
+                      onClick: () => setSelected(dir.path),
+                      onDoubleClick: () => enter(dir),
+                    },
+                      h('div', { className: 'nm4' },
+                        h(Icon, { name: 'folder', size: 13, style: { color: '#c1a06a' } }),
+                        h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, dir.name),
+                      ),
+                      h('span', { className: 'dim2' }, dir.mtime ? ago(dir.mtime) : ''),
+                      h('span', { className: 'dim2' }, '目录'),
+                    )),
+                    listing && listing.hasMore === true
+                      ? h('div', { key: 'more', className: 'rd-wsrow' },
+                        h('button', { className: 'rd-btn sm', disabled: busy === 'more', onClick: () => loadMore() },
+                          busy === 'more' ? '加载中…' : '加载更多（' + dirs.length + '/' + (listing.total ?? dirs.length) + '）'))
+                      : null,
+                  ],
             ),
             h('div', { className: 'rd-wsfoot' },
               h('span', null, '双击进入目录 · ↑↓ 选择 · Enter 进入 · Backspace 上级'),
@@ -2034,9 +2050,24 @@ window.__ModuleLoader__.load({
       }, [host.id])
 
       React.useEffect(() => {
-        void load()
-        const timer = setInterval(() => void load(), 8000)
-        return () => clearInterval(timer)
+        let cancelled = false
+        let timer = null
+        let running = false
+        const tick = async () => {
+          if (cancelled || running) return
+          running = true
+          try {
+            await load()
+          } finally {
+            running = false
+          }
+          if (!cancelled) timer = setTimeout(tick, 8000)
+        }
+        void tick()
+        return () => {
+          cancelled = true
+          if (timer !== null) clearTimeout(timer)
+        }
       }, [load])
 
       const start = async (port, local) => {
@@ -2139,7 +2170,9 @@ window.__ModuleLoader__.load({
     function FilePanelInner({ host }) {
       const [path, setPath] = React.useState('')
       const [entries, setEntries] = React.useState([])
+      const [page, setPage] = React.useState({ total: 0, offset: 0, limit: 500, hasMore: false })
       const [loading, setLoading] = React.useState(false)
+      const [loadingMore, setLoadingMore] = React.useState(false)
       const [error, setError] = React.useState('')
       const [filter, setFilter] = React.useState('')
       const [notice, setNotice] = React.useState('')
@@ -2147,21 +2180,34 @@ window.__ModuleLoader__.load({
       const workspace = stateWorkspaces.find((row) => row.connectionId === host.id)
       const root = workspace ? workspace.path : '/'
 
-      const load = React.useCallback(async (next) => {
-        setLoading(true)
+      const load = React.useCallback(async (next, offset = 0, append = false) => {
+        if (append) setLoadingMore(true)
+        else setLoading(true)
         setError('')
         setNotice('')
         try {
           const target = typeof next === 'string' && next.length > 0 ? next : root
-          const data = await call('/connections/' + host.id + '/files?path=' + encodeURIComponent(target))
+          const data = await call('/connections/' + host.id + '/files?path=' + encodeURIComponent(target) + '&offset=' + offset + '&limit=500')
           setPath(data.path)
-          setEntries(data.entries || [])
+          setPage({
+            total: Number(data.total) || 0,
+            offset: Number(data.offset) || offset,
+            limit: Number(data.limit) || 500,
+            hasMore: data.hasMore === true,
+          })
+          setEntries((previous) => append ? [...previous, ...(data.entries || [])] : (data.entries || []))
         } catch (failure) {
           setError(failure instanceof Error ? failure.message : String(failure))
         } finally {
           setLoading(false)
+          setLoadingMore(false)
         }
       }, [host.id, root])
+
+      const loadMore = () => {
+        if (page.hasMore !== true) return
+        void load(path || root, Number(page.offset) + Number(page.limit), true)
+      }
 
       React.useEffect(() => {
         setPath('')
@@ -2251,6 +2297,11 @@ window.__ModuleLoader__.load({
             ),
           )),
         ) : null,
+        page.hasMore === true
+          ? h('div', { className: 'rd-empty', style: { padding: '8px 0' } },
+            h('button', { className: 'rd-btn sm', disabled: loadingMore, onClick: () => loadMore() },
+              loadingMore ? '加载中…' : '加载更多（已显示 ' + entries.length + '/' + page.total + '）'))
+          : null,
       )
     }
 
@@ -2801,14 +2852,18 @@ window.__ModuleLoader__.load({
       ctxRef = ctx
       ensureStyle()
       try {
-        // Development affordances for the screenshot harness; removed in v0.9.0.
-        window.__RD_STORE__ = store
-        window.__RD_OPEN_SESSION__ = (id) => {
-          const ui = ctx.get('uiWorkspace')
-          if (ui) ui.openSession(id)
+        const debugInfo = globalThis.__DSH_REMOTE_DECK__
+        if (debugInfo !== null && typeof debugInfo === 'object' && debugInfo.debug === true) {
+          // Debug/screenshot affordances only when the host was started with
+          // DSH_REMOTE_DECK_DEBUG=1; they are not exposed in normal sessions.
+          window.__RD_STORE__ = store
+          window.__RD_OPEN_SESSION__ = (id) => {
+            const ui = ctx.get('uiWorkspace')
+            if (ui) ui.openSession(id)
+          }
+          window.__RD_OPEN_CONSOLE__ = () => openConsole()
+          window.__RD_CTX__ = ctx
         }
-        window.__RD_OPEN_CONSOLE__ = () => openConsole()
-        window.__RD_CTX__ = ctx
       } catch {
         /* not a page context */
       }
@@ -2846,8 +2901,11 @@ window.__ModuleLoader__.load({
           }
         }
         bind()
+        let refreshing = false
         const timer = setInterval(() => {
-          if (document.visibilityState !== 'hidden') void refresh()
+          if (refreshing || document.visibilityState === 'hidden') return
+          refreshing = true
+          void refresh().finally(() => { refreshing = false })
         }, 8000)
         const bindTimer = setInterval(() => {
           bind()
