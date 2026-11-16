@@ -36,7 +36,7 @@ addresses and paths are demo data (`dev-box`, `203.0.113.10`, `/srv/demo-app`).
 | Area | What you get |
 | --- | --- |
 | Connections | Multiple hosts, key or password auth, `~/.ssh/config` import, connection test with OS/latency, per-host auto-connect (off by default; toggle in the dialog, quick panel or console), keepalive and backoff reconnect |
-| Workspaces | Browse remote folders with breadcrumbs, filters and keyboard navigation; add one as a DSH workspace; custom sidebar name; remove locally without touching the remote directory |
+| Workspaces | Browse remote folders with breadcrumbs, filters and keyboard navigation; add one as a DSH workspace; custom sidebar name; remove locally without touching the remote directory. Each remote workspace row shows a small connection status dot in the grouped/tree sidebar view |
 | Sessions | Remote sessions get a header pill, a colour-coded sidebar badge and a hover line; local sessions are unchanged |
 | Console | Machine rail, host overview, stats, workspace cards, recent sessions, search, and a remote file browser with download / save-to-local / reveal |
 | Terminal | Remote PTY in a full xterm.js terminal: colours, cursor, full-screen programs, paste and replay buffer |
@@ -166,6 +166,10 @@ the host; the terminal is one PTY channel; forwarding is one local listener per 
 - The terminal ships a vendored xterm.js build (colours, cursor, full-screen programs). If the
   asset loader is blocked, the plugin falls back to a plain line renderer.
 - The UI is Chinese-first; English strings land in v1.1.0.
+- Workspace status dots are only visible in the grouped/tree sidebar view; flat,
+  collapsed-rail and search views have no workspace rows. Session badges and the SSH
+  chip still show the host state. Set `DSH_REMOTE_DECK_WORKSPACE_STATUS=0` to disable
+  the dots.
 - `~/.ssh/config` import covers Host/HostName/Port/User/IdentityFile/ProxyJump; proxy commands and
   host-key pinning are not wired into the connection dialogs yet.
 - `ss` or `netstat` is required for automatic port discovery; manual forwarding still works.
@@ -179,8 +183,10 @@ npm run pack:dry     # inspect the published file list
 ```
 
 Design mockups and their sanitized renders live in `docs/design/v2/`; acceptance runs are
-recorded in the CHANGELOG. The version plan is in [ROADMAP.md](ROADMAP.md), release steps in
-[PUBLISH.md](PUBLISH.md), and the iteration runbook in [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
+recorded in the CHANGELOG. The workspace status design and its internal-DOM boundary are in
+[docs/WORKSPACE-STATUS.md](docs/WORKSPACE-STATUS.md). The version plan is in
+[ROADMAP.md](ROADMAP.md), release steps in [PUBLISH.md](PUBLISH.md), and the iteration runbook
+in [docs/MAINTENANCE.md](docs/MAINTENANCE.md).
 
 ## License
 

@@ -72,6 +72,7 @@
 | 工作区打不开（attach failed） | DSH_HOME 迁移导致旧路径；插件启动时会自愈，仍失败则用 `-Doctor` 看 stub 路径 |
 | 两个插件同时存在 | 都会接管 `ctx.fs`；用 `install.ps1 -RemoveOld` 或卸载旧插件 |
 | 终端退回纯文本 | xterm 资源加载失败（`/assets/*` 403/404）；检查 token 与 `vendor/xterm` 是否存在 |
+| 工作区状态点不显示 | 仅在 grouped/tree 视图有工作区行；flat/rail/搜索态没有行。DSH 升级后若 `data-row-key` 变化，点会静默消失；用 `DSH_REMOTE_DECK_WORKSPACE_STATUS=0` 可整体关闭，不设则默认开启 |
 
 ## 6. 扩展指引
 

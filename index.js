@@ -34,7 +34,7 @@ function isInsidePath(child, root) {
   return rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel)
 }
 
-const BUILD = '1.5.10'
+const BUILD = '1.6.1'
 const diagnostics = { pid: process.pid, ssh2: 'pending', ssh2Error: '', checkedAt: 0 }
 void ssh2SelfTest().then((result) => {
   diagnostics.ssh2 = result.ok ? 'ok' : 'failed'
@@ -62,6 +62,7 @@ const BASH_CONFIG = Object.freeze({
   killGraceMs: readIntEnv('DSH_REMOTE_DECK_KILL_GRACE_MS', 1000, 200, 10000),
   progressIntervalMs: readIntEnv('DSH_REMOTE_DECK_PROGRESS_MS', 5000, 1000, 60000),
 })
+const WORKSPACE_STATUS_ENABLED = process.env.DSH_REMOTE_DECK_WORKSPACE_STATUS !== '0'
 
 /** Resolve a request timeout against the configured default and hard cap. */
 function clampTimeoutMs(value) {
@@ -540,6 +541,7 @@ export function apply(ctx) {
           build: BUILD,
           dataDir: DATA_DIR,
           debug: process.env.DSH_REMOTE_DECK_DEBUG === '1',
+          workspaceStatus: WORKSPACE_STATUS_ENABLED,
         },
       })
     })

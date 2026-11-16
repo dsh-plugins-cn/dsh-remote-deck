@@ -253,6 +253,7 @@ window.__ModuleLoader__.load({
         store.state = await call('/state')
         store.error = ''
         store.ready = true
+        syncWorkspaceStatusStyles()
       } catch (error) {
         store.error = error instanceof Error ? error.message : String(error)
       }
@@ -268,6 +269,7 @@ window.__ModuleLoader__.load({
       } catch {
         /* services appear after boot */
       }
+      syncWorkspaceStatusStyles()
       emit()
     }
 
@@ -314,6 +316,129 @@ window.__ModuleLoader__.load({
     function openWorkspaceFor(remote) {
       const items = store.workspaces.items || []
       return items.find((item) => samePath(item.path, remote.stub))
+    }
+
+    // ------------------------------------------------- workspace status dots
+
+    const WORKSPACE_STATUS_STYLE_ATTR = 'data-rd-ws-status'
+    const WORKSPACE_STATUS_ANIMATION = 'rd-ws-status-spin'
+    let workspaceStatusCss = ''
+
+    function connectionStatusLabel(status) {
+      if (status === 'connected') return '已连接'
+      if (status === 'connecting') return '连接中'
+      if (status === 'error') return '连接失败'
+      return '未连接'
+    }
+
+    /** One display sentence for the SSH chip's accessible name. */
+    function sshStatusSummary(connections) {
+      if (connections.length === 0) return '远程开发：还没有 SSH 连接'
+      return '远程开发：' + connections.map((row) => row.name + ' ' + connectionStatusLabel(row.status)).join('，')
+    }
+
+    function cssAttributeValue(value) {
+      return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    }
+
+    /**
+     * Resolve every DSH workspace item that belongs to a remote host.
+     * The host /state row carries workspaceId after 1.6.1; samePath is only a
+     * fallback for an older host whose rules are still in memory.
+     */
+    function workspaceStatusEntries() {
+      const items = store.workspaces.items || []
+      const rows = remoteWorkspaces()
+      const connections = (store.state && store.state.connections) || []
+      const entries = []
+      const seen = new Set()
+      for (const item of items) {
+        const row = (item.workspaceId
+          ? rows.find((candidate) => candidate.workspaceId === item.workspaceId)
+          : undefined) ?? rows.find((candidate) => samePath(candidate.stub, item.path))
+        if (row === undefined) continue
+        const workspaceId = row.workspaceId || item.workspaceId
+        if (typeof workspaceId !== 'string' || workspaceId.length === 0 || seen.has(workspaceId)) continue
+        const host = connections.find((candidate) => candidate.id === row.connectionId)
+        if (host === undefined) continue
+        const status = host.status === 'connected' || host.status === 'connecting' || host.status === 'error'
+          ? host.status
+          : 'disconnected'
+        entries.push({ workspaceId, status })
+        seen.add(workspaceId)
+      }
+      return entries
+    }
+
+    function workspaceStatusRules(entries) {
+      const grouped = { connected: [], connecting: [], disconnected: [], error: [] }
+      for (const entry of entries) grouped[entry.status].push(entry.workspaceId)
+      const common = [
+        'content:""',
+        'position:absolute',
+        'box-sizing:border-box',
+        'width:7px',
+        'height:7px',
+        'border-radius:50%',
+        'inset-inline-start:calc(var(--dsh-sidebar-row-padding,12px) - var(--dsh-sidebar-paint-inset,3px) + var(--dsh-workspace-indent,0px) + 10px)',
+        'top:calc(50% + 5.5px)',
+        'pointer-events:none',
+        'z-index:1',
+        'box-shadow:0 0 0 1.5px var(--dsw-specific-sidebar-fill)',
+      ].join(';')
+      const variants = {
+        connected: 'background:var(--dsw-alias-state-success-primary)',
+        connecting:
+          'background:transparent;border:1.5px solid var(--dsw-alias-state-warn-primary);border-inline-end-color:transparent;animation:' +
+          WORKSPACE_STATUS_ANIMATION + ' 1.2s linear infinite',
+        disconnected: 'background:transparent;border:1.5px solid var(--dsw-alias-label-tertiary)',
+        error:
+          'background:var(--dsw-alias-state-error-primary);background-image:linear-gradient(135deg,transparent 42%,var(--dsw-alias-label-on-color) 42% 58%,transparent 58%)',
+      }
+      const rules = ['[data-row-key^="workspace:"]{position:relative}']
+      for (const status of Object.keys(grouped)) {
+        const ids = grouped[status]
+        if (ids.length === 0) continue
+        const selectors = ids
+          .map((id) => '[data-row-key="workspace:' + cssAttributeValue(id) + '"]::after')
+          .join(',')
+        rules.push(selectors + '{' + common + ';' + variants[status] + '}')
+      }
+      rules.push(
+        '@keyframes ' + WORKSPACE_STATUS_ANIMATION + '{to{transform:rotate(360deg)}}',
+        '@media (prefers-reduced-motion: reduce){[data-row-key^="workspace:"]::after{animation:none!important}}',
+      )
+      return rules.join('\n')
+    }
+
+    function syncWorkspaceStatusStyles() {
+      if (typeof document === 'undefined') return
+      const info = boot()
+      if (info === null || info.workspaceStatus === false) {
+        const old = document.querySelector('style[' + WORKSPACE_STATUS_STYLE_ATTR + ']')
+        if (old !== null) old.remove()
+        workspaceStatusCss = ''
+        return
+      }
+      if (!store.ready || store.state === null) return
+      const entries = workspaceStatusEntries()
+      const css = workspaceStatusRules(entries)
+      if (css === workspaceStatusCss) return
+      let node = document.querySelector('style[' + WORKSPACE_STATUS_STYLE_ATTR + ']')
+      if (node === null) {
+        node = document.createElement('style')
+        node.setAttribute(WORKSPACE_STATUS_STYLE_ATTR, '1')
+        document.head.appendChild(node)
+      }
+      node.textContent = css
+      workspaceStatusCss = css
+      if (info.debug === true) {
+        window.__RD_WS_STATUS__ = {
+          css,
+          entries,
+          sync: syncWorkspaceStatusStyles,
+        }
+      }
     }
 
     // ---------------------------------------------------------------- styles
@@ -462,6 +587,9 @@ window.__ModuleLoader__.load({
 
       .rd-badge { width:15px;height:15px;border-radius:4px;display:grid;place-items:center;color:#fff;flex:none }
       .rd-badge svg { width:9px;height:9px;stroke-width:2.4 }
+      .rd-badge[data-state="disconnected"] { opacity:.58;box-shadow:0 0 0 1.5px var(--dsw-specific-sidebar-fill),0 0 0 2.5px var(--dsw-alias-label-tertiary) }
+      .rd-badge[data-state="connecting"] { box-shadow:0 0 0 1.5px var(--dsw-specific-sidebar-fill),0 0 0 2.5px var(--dsw-alias-state-warn-primary) }
+      .rd-badge[data-state="error"] { box-shadow:0 0 0 1.5px var(--dsw-specific-sidebar-fill),0 0 0 2.5px var(--dsw-alias-state-error-primary) }
       .rd-hover { display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
 
       /* ---- console ---- */
@@ -1150,11 +1278,13 @@ window.__ModuleLoader__.load({
       const connected = connections.filter((row) => row.status === 'connected')
       const label = connected.length === 0 ? 'SSH' : connected.length === 1 ? 'SSH · ' + connected[0].name : 'SSH · ' + connected.length + ' 台'
       const latency = connected.length === 1 && connected[0].latencyMs ? connected[0].latencyMs + 'ms' : ''
+      const ariaLabel = sshStatusSummary(connections)
       return h(React.Fragment, null,
         h('button', {
           type: 'button',
           className: 'rd-chip',
           'data-open': String(open),
+          'aria-label': ariaLabel,
           title: connected.length > 0
             ? connected.map((row) => row.name).join(', ') + (latency ? ' · ' + latency : '')
             : '远程开发',
@@ -3781,10 +3911,13 @@ window.__ModuleLoader__.load({
     function SessionBadge({ sessionId }) {
       const remote = useRemote(sessionId)
       if (!remote) return null
+      const host = (store.state && store.state.connections || []).find((row) => row.id === remote.connectionId)
+      const status = host ? host.status : 'disconnected'
       return h('span', {
         className: 'rd-badge',
+        'data-state': status,
         style: { background: colorOf(remote.color) },
-        title: remote.host + ' · ' + remote.path,
+        title: remote.host + ' · ' + remote.path + ' · ' + connectionStatusLabel(status),
       }, h(Icon, { name: 'term', size: 9 }))
     }
 
@@ -4076,6 +4209,12 @@ window.__ModuleLoader__.load({
           }
           window.__RD_OPEN_CONSOLE__ = () => openConsole()
           window.__RD_CTX__ = ctx
+          window.__RD_WS_STATUS__ = {
+            get css() {
+              return workspaceStatusCss
+            },
+            sync: syncWorkspaceStatusStyles,
+          }
         }
       } catch {
         /* not a page context */
@@ -4114,6 +4253,11 @@ window.__ModuleLoader__.load({
           }
         }
         bind()
+        const onVisible = () => {
+          if (document.visibilityState !== 'hidden') void refresh()
+        }
+        document.addEventListener('visibilitychange', onVisible)
+        window.addEventListener('focus', onVisible)
         let refreshing = false
         const timer = setInterval(() => {
           if (refreshing || document.visibilityState === 'hidden') return
@@ -4132,6 +4276,8 @@ window.__ModuleLoader__.load({
           clearInterval(bindTimer)
           clearInterval(retry)
           clearInterval(themeTimer)
+          document.removeEventListener('visibilitychange', onVisible)
+          window.removeEventListener('focus', onVisible)
           if (unsubWorkspaces !== null) unsubWorkspaces()
           if (unsubSessions !== null) unsubSessions()
         }
@@ -4180,6 +4326,9 @@ window.__ModuleLoader__.load({
       ctx.effect(() => () => {
         const node = document.querySelector('style[data-remote-deck]')
         if (node) node.remove()
+        const statusNode = document.querySelector('style[' + WORKSPACE_STATUS_STYLE_ATTR + ']')
+        if (statusNode) statusNode.remove()
+        workspaceStatusCss = ''
       }, 'remote-deck: styles')
     }
 

@@ -11,6 +11,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.6.1] - 2026-11-16
+
+### Added
+
+- Workspace connection status dots: each remote workspace row now shows a 7px dot at
+  the folder's lower-right corner. Green = connected, amber ring = connecting,
+  gray ring = disconnected, red with a white slash = connection error. The dot is
+  rendered as a CSS pseudo-element keyed by `data-row-key="workspace:<id>"`; the
+  plugin does not insert React/DOM nodes or change the workspace title/folder colour.
+- `GET /state.workspaces[]` now carries `workspaceId`, resolved from the DSH workspace
+  registry with realpath-aware matching. This avoids relying on `$DSH_HOME` spelling
+  when the home is reached through a junction or has moved.
+- Session row badges now carry the host connection state (ring/opacity) and a hover
+  title; the SSH chip has an accessible summary of every host's state.
+- `DSH_REMOTE_DECK_WORKSPACE_STATUS=0` disables the workspace dots without a rebuild.
+- `get /state` remains backward compatible: older clients ignore the new field.
+
+### Changed
+
+- The workspace status stylesheet is generated once and updated only when the mapping
+  changes; it is removed on plugin unload.
+- `/state` refresh now also runs when the page becomes visible or regains focus.
+
+### Known limits
+
+- Workspace status dots are only visible in the grouped/tree sidebar view. Flat,
+  collapsed-rail and search views have no workspace rows; the Session badge and SSH
+  chip still show host state there.
+- The dot depends on DSH's internal `data-row-key` row attribute and is not an official
+  slot. If a future DSH release changes the attribute, the dots disappear without
+  affecting other functionality; the compatibility document must be updated.
+
+### Verified
+
+- `npm run check` and `node --test` (52/52) pass.
+- deckcheck profile + real DSH page: 4 workspace rows, 3 remote dots, the local
+  workspace left untouched; connected/error/connecting/disconnected variants,
+  reduced-motion rule and kill switch exercised. Desktop profile was not touched.
+
 ## [1.5.10] - 2026-11-16
 
 ### Changed
