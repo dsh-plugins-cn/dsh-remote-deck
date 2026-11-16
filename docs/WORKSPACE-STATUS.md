@@ -22,13 +22,17 @@ have no dot.
 
 1. The host adds `workspaceId` to each `GET /state.workspaces[]` row, matching the
    workspace registry by canonical path (`realpath`), so a `$DSH_HOME` junction or a
-   moved home does not break the mapping.
+   moved home does not break the mapping. Realpath lookups are cached for 30s and
+   cleared on workspace create/remove, so the 8s `/state` refresh does not repeatedly
+   block the host on filesystem calls.
 2. The client maps `workspaceId` → connection state. It falls back to the older
    `stub`/`path` comparison only when the host does not send the field.
 3. The client generates one `<style data-rd-ws-status>` with selectors keyed by
    `data-row-key="workspace:<id>"`. No DOM nodes are inserted and React is not touched.
 4. Status updates on `/state` refresh (8s), after connection actions, and when the page
    becomes visible or regains focus.
+5. Status generation is best-effort: any DOM/style failure is caught and only logged in
+   debug mode, so the status layer can never break the rest of the plugin UI.
 
 ## Why CSS and not a slot
 

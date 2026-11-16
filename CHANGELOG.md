@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.6.2] - 2026-11-16
+
+### Changed
+
+- The workspace status layer is now best-effort: any CSS/DOM failure is caught and
+  logged in debug mode, and the rest of the plugin UI stays usable. This keeps a DSH
+  DOM/theme change from turning the status layer into a plugin failure.
+- Realpath lookups used to attach `workspaceId` are cached for 30s and the cache is
+  cleared on workspace create/remove. `/state` no longer performs a synchronous
+  realpath per workspace on every 8s refresh.
+- The SSH chip title now includes every host's status (matching its aria-label).
+- The quick panel adds a small "workspace dot" legend (connected / connecting /
+  disconnected / failed), so the new row markers are discoverable without hovering.
+
+### Verified
+
+- `npm run check`; `node --test` (52/52); pack dry.
+- Upgrade path: deckcheck 1.5.10 → 1.6.2 (separate test install), DSH 0.2.2-rc.3;
+  host loads and page renders; workspace dots still map 3 remote + 1 local.
+- Light theme and 150% zoom visual checks in the deckcheck test host.
+
 ## [1.6.1] - 2026-11-16
 
 ### Added

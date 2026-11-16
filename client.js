@@ -412,6 +412,17 @@ window.__ModuleLoader__.load({
     }
 
     function syncWorkspaceStatusStyles() {
+      try {
+        syncWorkspaceStatusStylesUnsafe()
+      } catch (error) {
+        // The status layer is cosmetic. A DSH DOM/theme change must never take
+        // down the rest of the plugin UI.
+        workspaceStatusCss = ''
+        if (boot()?.debug === true) console.warn('[remote-deck] workspace status styles:', error)
+      }
+    }
+
+    function syncWorkspaceStatusStylesUnsafe() {
       if (typeof document === 'undefined') return
       const info = boot()
       if (info === null || info.workspaceStatus === false) {
@@ -522,6 +533,9 @@ window.__ModuleLoader__.load({
       .rd-body { overflow:auto;padding:0 14px 4px;display:flex;flex-direction:column;gap:8px }
 
       .rd-hosts { display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px }
+      .rd-legend { display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:7px 2px 0;font-size:10px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-legend .lbl { font-weight:600;margin-right:1px }
+      .rd-legend .g { display:inline-flex;align-items:center;gap:3px }
       .rd-host { border:1px solid var(--dsw-alias-border-l1,#e8e8ec);border-radius:9px;padding:8px 9px;display:flex;flex-direction:column;gap:6px;background:var(--dsw-alias-bg-layer-1,#fff);cursor:pointer;position:relative }
       .rd-host[data-active="true"] { border-color:#a9c9ec;background:rgba(47,125,221,.06);box-shadow:0 0 0 2px rgba(47,125,221,.09) }
       .rd-host .r1 { display:flex;align-items:center;gap:6px;min-width:0 }
@@ -1285,9 +1299,7 @@ window.__ModuleLoader__.load({
           className: 'rd-chip',
           'data-open': String(open),
           'aria-label': ariaLabel,
-          title: connected.length > 0
-            ? connected.map((row) => row.name).join(', ') + (latency ? ' · ' + latency : '')
-            : '远程开发',
+          title: ariaLabel + (latency ? ' · ' + latency : ''),
           onClick: () => {
             store.open = !store.open
             if (store.open) void refresh()
@@ -1470,6 +1482,15 @@ window.__ModuleLoader__.load({
               : h('div', { className: 'rd-host add', onClick: () => openHostDialog() },
                 h(Icon, { name: 'plus', size: 13 }), '添加机器'),
           ),
+          workspaces.length > 0
+            ? h('div', { className: 'rd-legend', title: '侧栏工作区行右下角的状态点' },
+              h('span', { className: 'lbl' }, '工作区点'),
+              h('span', { className: 'g' }, h(Dot, { state: 'connected' }), '已连接'),
+              h('span', { className: 'g' }, h(Dot, { state: 'connecting' }), '连接中'),
+              h('span', { className: 'g' }, h(Dot, { state: 'disconnected' }), '未连接'),
+              h('span', { className: 'g' }, h(Dot, { state: 'error' }), '失败'),
+            )
+            : null,
 
           h('div', { className: 'rd-sect' }, '快捷操作'),
           h('div', { className: 'rd-quick' },
