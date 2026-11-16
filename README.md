@@ -41,6 +41,7 @@ addresses and paths are demo data (`dev-box`, `203.0.113.10`, `/srv/demo-app`).
 | Console | Machine rail, host overview, stats, workspace cards, recent sessions, search, and a remote file browser with download / save-to-local / reveal |
 | Terminal | Remote PTY in a full xterm.js terminal: colours, cursor, full-screen programs, paste and replay buffer |
 | Ports | Automatic discovery of remote listening ports, one-click forwarding, persistence and restore on reconnect |
+| Memory | Remote memory (off by default): plugin and per-machine switches, machine/workspace briefs, notes, a ≤2 KB summary injected into new remote sessions, and a `remote_memory` tool; data stays local |
 | Theme | Light and dark, driven by DSH theme tokens |
 
 ## Install

@@ -1,6 +1,6 @@
 {
   "name": "dsh-remote-deck",
-  "version": "1.4.3",
+  "version": "1.5.10",
   "private": false,
   "type": "module",
   "description": "Remote Deck: SSH workspaces for DeepSeek Harness. Connect any number of machines, browse remote folders, and run DSH sessions with the remote filesystem, shell, search, terminal and port forwarding.",
@@ -26,7 +26,7 @@
   },
   "files": [
     "index.js",
-    "lib/*.js",
+    "lib/**/*.js",
     "client.js",
     "cordis.patch.yml",
     "locale/*.json",
@@ -37,7 +37,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "check": "node --check index.js && node --check client.js && node scripts/check-manifest.mjs",
+    "check": "node --check index.js && node --check client.js && node scripts/check-manifest.mjs && node scripts/check-client.mjs",
     "test": "node --test",
     "pack:dry": "npm pack --dry-run"
   },

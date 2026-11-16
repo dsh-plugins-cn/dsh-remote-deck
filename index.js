@@ -7,18 +7,19 @@
  * A loopback API feeds the sidebar chip, the quick panel and the console.
  */
 import { randomBytes, randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createApi } from './lib/api.js'
 import { ConnectionStore, RemoteHost, Secrets, ssh2SelfTest } from './lib/connection.js'
 import { ForwardManager } from './lib/forwards.js'
 import { Routing } from './lib/routing.js'
 import { readSshConfig } from './lib/ssh-config.js'
+import { MemoryService } from './lib/memory/index.js'
 import { TerminalManager } from './lib/terminal.js'
-import { errorText } from './lib/util.js'
+import { errorText, slugFor } from './lib/util.js'
 import { renderBashResult, renderPromoted, resolveWorkdir } from './lib/bash-result.js'
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url))
@@ -28,7 +29,12 @@ const DATA_DIR = join(DSH_HOME, 'remote-deck')
 const LEGACY_DIR = join(DSH_HOME, 'remote-ssh')
 const WORKSPACE_ROOT = join(DATA_DIR, 'workspaces')
 const LEGACY_WORKSPACE_ROOT = join(LEGACY_DIR, 'workspaces')
-const BUILD = '1.4.3'
+function isInsidePath(child, root) {
+  const rel = relative(resolve(root), resolve(child))
+  return rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+const BUILD = '1.5.10'
 const diagnostics = { pid: process.pid, ssh2: 'pending', ssh2Error: '', checkedAt: 0 }
 void ssh2SelfTest().then((result) => {
   diagnostics.ssh2 = result.ok ? 'ok' : 'failed'
@@ -115,6 +121,23 @@ export function apply(ctx) {
     ensureConnected,
     getRegistry: () => ctx.get('workspaceRegistry'),
   })
+
+  const connectHost = async (id) => {
+    const host = hostFor(id)
+    if (host === undefined) return undefined
+    if (host.state !== 'connected') await host.connect(secrets)
+    return host
+  }
+
+  const memory = new MemoryService({
+    ctx,
+    dataDir: DATA_DIR,
+    routing,
+    hostFor,
+    connectHost,
+    connectionName: (id) => store.get(id)?.name || id,
+  })
+  memory.install(ctx.workingDirectory)
 
   const forwards = new ForwardManager({ hostFor, secrets, dataDir: DATA_DIR, onLog: debug })
   const terminals = new TerminalManager({ hostFor, secrets, onLog: debug })
@@ -484,6 +507,7 @@ export function apply(ctx) {
     terminals,
     forwards,
     assetDir: ASSET_DIR,
+    memory,
   })
   server.on('error', (error) => {
     console.error('[remote-deck] api server failed:', errorText(error))
@@ -536,10 +560,68 @@ export function apply(ctx) {
   // A moved DSH home (folder migration, drive change, junction) leaves stored
   // workspace paths spelled with the old alias; re-register under the canonical
   // path keeping the title, otherwise sessions cannot attach.
+  // A DSH workspace can outlive its marker file: DSH recreates the folder on open,
+  // but the marker is ours. Without it the workspace silently disappears from
+  // Remote Deck, so rebuild it from the memory cache that recorded its remote path.
+  const inferRemotePath = (connectionId, slug) => {
+    const cacheRoots = [
+      join(DATA_DIR, 'memory', 'brief', 'workspaces', connectionId),
+      join(DATA_DIR, 'memory', 'notes', 'workspaces', connectionId),
+    ]
+    for (const root of cacheRoots) {
+      if (!existsSync(root)) continue
+      for (const entry of readdirSync(root, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+        try {
+          const doc = JSON.parse(readFileSync(join(root, entry.name), 'utf8'))
+          const remotePath = typeof doc.remotePath === 'string' ? doc.remotePath : doc?.data?.remotePath
+          if (typeof remotePath !== 'string' || remotePath.length === 0) continue
+          if (slugFor(remotePath) === slug) return remotePath
+        } catch {
+          /* skip unreadable cache entries */
+        }
+      }
+    }
+    return ''
+  }
+
+  const restoreWorkspaceMarkers = async () => {
+    const registry = ctx.get('workspaceRegistry')
+    if (registry === undefined || typeof registry.list !== 'function') return
+    const roots = [WORKSPACE_ROOT, LEGACY_WORKSPACE_ROOT].filter((root) => existsSync(root))
+    if (roots.length === 0) return
+    for (const entity of [...registry.list()]) {
+      try {
+        const dir = typeof entity.path === 'string' ? entity.path : ''
+        if (dir.length === 0 || !roots.some((root) => isInsidePath(dir, root))) continue
+        const markerPath = join(dir, '.dsh-remote.json')
+        if (existsSync(markerPath)) continue
+        const connectionId = basename(dirname(dir))
+        const record = store.get(connectionId)
+        if (record === undefined) continue
+        const remotePath = inferRemotePath(connectionId, basename(dir))
+        if (remotePath === '') {
+          debug('workspace marker missing, remote path unknown:', dir)
+          continue
+        }
+        mkdirSync(dir, { recursive: true })
+        writeFileSync(
+          markerPath,
+          JSON.stringify({ version: 1, connectionId, path: remotePath, host: record.name, color: record.color }, null, 2) + '\n',
+          { encoding: 'utf8', mode: 0o600 },
+        )
+        console.log('[remote-deck] restored workspace marker', dir, '->', remotePath)
+      } catch (error) {
+        debug('workspace marker restore failed:', errorText(error))
+      }
+    }
+  }
+
   ctx.inject(['workspaceRegistry'], (scope) => {
     void (async () => {
       const registry = scope.get('workspaceRegistry')
       if (registry === undefined) return
+      await restoreWorkspaceMarkers()
       const roots = [WORKSPACE_ROOT, LEGACY_WORKSPACE_ROOT].filter((root) => existsSync(root))
       for (const entity of [...registry.list()]) {
         try {

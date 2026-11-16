@@ -23,6 +23,6 @@
 5. **发布前固定验收矩阵**：
    - `npm run check`、`node --test`（全绿）；
    - 隔离 E2E `smoke,E1,E2,E3,E4` 5/5；
-   - 真机 vm03：远端 read/write/覆盖/edit、本机绝对路径 read/write/edit、`/tmp`、bash EOF、promote/job_kill、read_image；
+   - 真机：远端 read/write/覆盖/edit、本机绝对路径 read/write/edit、`/tmp`、bash EOF、promote/job_kill、read_image；
    - 桌面面板与回环 API CORS（dsh-app）冒烟。
 6. 发版后只更新文档；再有代码改动等下一次批量版本。

@@ -11,6 +11,171 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.5.10] - 2026-11-16
+
+### Changed
+
+- Workspace brief no longer injects a truncated README fragment. Truncated prose
+  can invert its meaning (a cut list read as the whole scope), so briefs now carry
+  only whole sentences plus structured facts.
+- Multi-repo workspaces list **all** subrepos (up to 12) with stack, commands and
+  the role parsed from the README table; a "… N more" line appears only when the
+  cap is hit.
+- Detects Flutter, Java, PHP and Python requirements in addition to Node/Go/Rust/
+  Make; per-repo README reads are gone (they were never used).
+- `entry docs: AGENTS.md` is reported when the workspace root has one.
+- Brief cache version bumped to 3, so old cached briefs regenerate on next refresh.
+- The memory page shows the stored brief JSON behind a "原始数据（存储内容）" toggle,
+  so what is stored can be told apart from what is rendered.
+
+## [1.5.9] - 2026-11-16
+
+### Fixed
+
+- Long auto-brief values (README and subrepo lines) are no longer permanently cut
+  at two lines: each clamped row gets an 展开/收起 control and the row text is
+  clickable. The full text was already there, it just had no way to expand.
+- The injection preview is taller (300px) so a normal 2KB bundle shows in one go.
+
+## [1.5.8] - 2026-11-16
+
+### Fixed
+
+- A workspace whose `.dsh-remote.json` marker disappeared no longer vanishes from
+  Remote Deck while DSH still lists it. On load the host rebuilds the marker from
+  the memory cache entry that recorded its remote path (connection id from the
+  parent folder, name/colour from the connection record).
+- Workspace lists (console chips, memory picker, counts) are now ordered by
+  workspace creation time instead of folder name, matching "first added first".
+
+## [1.5.7] - 2026-11-16
+
+### Fixed
+
+- The floating panel now explains a stale loopback address instead of a bare
+  "服务未连接": the copy names the cause (plugin replaced while DSH was running)
+  and the fix order (reload the page first, fully restart DSH if that fails).
+- Added a "重新加载" action next to "重试" for connection-type failures; the footer
+  appends "· 已断开" so a cached host version is not shown as healthy.
+
+## [1.5.6] - 2026-11-16
+
+### Fixed
+
+- Success actions no longer show a red "操作失败" toast. `pushToast()` maps its
+  argument as an error, so "已保存"/"记忆简报已刷新" were rendered as failures.
+  Added `pushInfo()` for success toasts and a green accent for level `ok`.
+- Plain (non-git) workspaces no longer produce a nearly empty brief: one `find
+  -maxdepth 2` now reports nested `.git`/`.svn`/`.hg` checkouts, per-child stack
+  and a child `README.md` fallback (e.g. `<remote-workspace>/example-a`, `<remote-workspace>/example-b`).
+
+## [1.5.5] - 2026-11-13
+
+### Changed
+
+- Memory tab rebuilt as two stacked layers: a machine layer (one per host, shared
+  by every workspace) and a workspace layer (one per workspace, swapped by the
+  picker inside that layer). Machine and workspace facts no longer interleave.
+- Workspace picker moved into the workspace layer header and now shows the note
+  count per workspace, so it is obvious which memory belongs to which workspace.
+- Each layer has its own add action: 添加机器笔记 / 添加工作区笔记.
+- Note dialog no longer asks for a scope. The entry point decides it; the dialog
+  shows a read-only target and uses kind chips instead of a native select.
+- Removed the duplicated brief/note summary tiles; connection state moved into
+  the machine layer header.
+- `GET /memory` accepts `wp` params and returns per-workspace note counts and
+  brief presence.
+
+## [1.5.4] - 2026-11-13
+
+### Changed
+
+- Brief v2: only slow-changing facts go into memory. Removed disk free/usage,
+  git branch and HEAD from the injected brief; those are live state and go stale.
+- Machine brief now includes tool versions (`node 20.11`, `git 2.43`, …) instead
+  of bare command names.
+- Workspace scan now discovers top-level subrepos and reports a multi-repo
+  layout with per-repo stack and commands (up to 8 repos).
+- Machine OS string no longer duplicates the architecture.
+- Settings descriptions now state that live disk/load/branch state is excluded.
+
+## [1.5.3] - 2026-11-13
+
+### Changed
+
+- Added a plugin-level "设置" entry in the Remote Deck console top bar.
+- Remote Deck settings is now a real page with a left category list, not a modal.
+  The first categories are "记忆" and "数据与诊断"; future global options can be
+  added as categories.
+- Removed the memory-settings button from the DSH main sidebar footer. The only
+  entry is inside the Remote Deck console.
+- Memory settings now use auto-saved switches and a 1/2/3 KB budget selector
+  instead of an ambiguous single "保存" button.
+- Machine/workspace scan toggles are persisted and honored by the brief refresh.
+- The memory tab still appears only while global memory is enabled.
+
+## [1.5.2] - 2026-11-13
+
+### Changed
+
+- Global memory settings moved out of the machine page to a dedicated "记忆"
+  entry at the bottom-left of the sidebar. It holds the plugin-wide switch,
+  injection budget and plugin-level notes.
+- The console "记忆" tab now exists only while global memory is enabled. With
+  global memory off, machine pages (overview/terminal/files/ports) show no
+  memory tab at all.
+- Machine pages keep only the per-machine switch, briefs and workspace/machine
+  notes; plugin-level notes are edited in global settings.
+- The global entry is the place for future plugin-wide memory options.
+
+## [1.5.1] - 2026-11-13
+
+### Changed
+
+- Reworked the memory tab layout: one column at the plugin's normal window size,
+  a clear page header, summary tiles, and a single environment-brief card.
+- Moved the plugin-wide switch and injection budget into a separate "global
+  settings" dialog. A machine page now shows only that machine's switch, brief,
+  and notes, so global controls no longer appear inside a machine.
+- Notes and injection preview moved into full-width cards; the preview is
+  collapsed by default. Onboarding is a real first-run card instead of an empty
+  state squeezed into a narrow column.
+- Plugin-level notes are edited in global settings; machine pages show only
+  workspace and machine notes.
+- The "refresh" action regenerates the brief on first enable automatically.
+
+### Fixed
+
+- Global switch no longer appears alongside per-machine state.
+- Narrow-window overflow and cramped button/field layout in the memory tab.
+
+## [1.5.0] - 2026-11-13
+
+### Added
+
+- Remote memory (default off): a plugin master switch plus a per-machine switch.
+  Both must be on, and the session must live in a remote workspace, before any
+  memory is injected or any tool is exposed.
+- Console "记忆" tab: machine/workspace briefs, scoped notes (workspace, machine,
+  plugin), note editor, injection preview, deterministic tidy, and the two
+  switches.
+- Read-only environment briefs: machine probe (OS, resources, installed tools)
+  and workspace scan (git, stack, scripts, README excerpt), cached under
+  `<DSH_HOME>/remote-deck/memory/brief` with a TTL and a workspace fingerprint.
+- Remote sessions receive a compact `systemPrompt.context` (default 2 KB, max
+  3 KB); details stay behind the `remote_memory` tool (search/remember/update/
+  archive).
+- Notes are local JSON with atomic writes, deterministic dedupe/merge/limit,
+  and history snapshots for undo. Nothing is written to the remote repository
+  or to a global `AGENTS.md`.
+
+### Security
+
+- The feature is scoped to remote workspaces; local sessions are untouched.
+- Note text is rejected when it looks like a password, token, or private key.
+- The bundled memory files stay under `<DSH_HOME>/remote-deck/memory`.
+
+
 ## [1.4.3] - 2026-11-11
 
 ### Fixed

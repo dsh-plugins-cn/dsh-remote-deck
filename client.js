@@ -64,6 +64,7 @@ window.__ModuleLoader__.load({
       ready: false,
       open: false,
       consoleTab: 'overview',
+      consoleView: 'console',
       dialog: null,
       errorText: '',
       notice: '',
@@ -135,7 +136,7 @@ window.__ModuleLoader__.load({
       const lower = message.toLowerCase()
       const make = (title, hint) => ({ level: 'error', title, hint, detail: message })
       if (/failed to fetch|networkerror|load failed/.test(lower)) {
-        return make('Remote Deck 服务未连接', '请完全退出 DSH 后重新打开；如果刚更新插件，这一步会重新注入服务地址。')
+        return make('Remote Deck 服务地址已失效', '插件在运行中被更新过，当前页面的服务地址已过期：先刷新页面（Ctrl+R）；仍不行再完全退出 DSH 后重开。')
       }
       if (/http 403|forbidden|token/.test(lower)) {
         return make('插件服务令牌已过期', '刷新页面；仍失败则完全重启 DSH。')
@@ -192,6 +193,23 @@ window.__ModuleLoader__.load({
         toastTimers.delete(item.id)
         emit()
       }, 5000)
+      toastTimers.set(item.id, timer)
+    }
+
+    /** Success/informational toast. pushToast() maps its argument as an error. */
+    function pushInfo(text) {
+      const now = Date.now()
+      const first = store.toasts[0]
+      if (first && first.title === text && now - first.at < 2000) return
+      toastSeq += 1
+      const item = { id: toastSeq, at: now, level: 'ok', title: String(text), hint: '', detail: '' }
+      store.toasts = [item, ...store.toasts].slice(0, 2)
+      emit()
+      const timer = setTimeout(() => {
+        store.toasts = store.toasts.filter((toast) => toast.id !== item.id)
+        toastTimers.delete(item.id)
+        emit()
+      }, 3000)
       toastTimers.set(item.id, timer)
     }
 
@@ -335,6 +353,9 @@ window.__ModuleLoader__.load({
       link: '<path d="M10 14a4 4 0 0 0 6 0l2-2a4 4 0 0 0-6-6l-1 1"/><path d="M14 10a4 4 0 0 0-6 0l-2 2a4 4 0 0 0 6 6l1-1"/>',
       dots: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
       bolt: '<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/>',
+      wand: '<path d="M15 4V2M15 10V8M10 6h2M18 6h2M4 20l10-10 2 2-10 10z"/>',
+      sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+      lock: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
     }
 
     function Icon({ name, size = 16, style }) {
@@ -552,6 +573,8 @@ window.__ModuleLoader__.load({
       .rd-status.bad { background: rgba(180,35,24,.08); color: #b42318; }
       .rd-toasts { position: absolute; left: 14px; right: 14px; bottom: 44px; display: flex; flex-direction: column-reverse; gap: 6px; pointer-events: none; z-index: 6; }
       .rd-toast { pointer-events: auto; display: flex; align-items: flex-start; gap: 8px; background: var(--dsw-alias-bg-layer-1, #fff); border: 1px solid var(--dsw-alias-border-l1, #e8e8ec); border-left: 3px solid #b42318; border-radius: 8px; padding: 7px 9px; box-shadow: 0 8px 22px rgba(16,24,40,.16); font-size: 11px; }
+      .rd-toast.ok { border-left-color: #2ea043 }
+      .rd-toast.info { border-left-color: #2f7ddd }
       .rd-toast .tt { font-weight: 600; color: var(--dsw-alias-label-primary, #1f2329); }
       .rd-toast .th { margin-top: 2px; color: var(--dsw-alias-label-secondary, #8f959e); line-height: 1.5; }
       .rd-toast .x { margin-left: auto; flex: none; border: 0; background: none; color: var(--dsw-alias-label-tertiary, #a3a8b0); cursor: pointer; font-size: 11px; }
@@ -689,6 +712,382 @@ window.__ModuleLoader__.load({
       .rd-portrow2 .mono { font-family:ui-monospace,Consolas,monospace }
       .rd-portempty { padding:14px 12px;font-size:11px;color:var(--dsw-alias-label-secondary,#8f959e) }
       .rd-portadd { display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 12px;border:1px dashed rgba(15,23,42,.18);border-radius:10px }
+
+      .rd-mempane { display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start }
+      .rd-memmain { min-width:0 }
+      .rd-memtop { display:flex;align-items:flex-start;gap:12px;margin-bottom:10px }
+      .rd-memtitle { font-size:14px;font-weight:600 }
+      .rd-memhint { font-size:10.5px;line-height:1.65;color:var(--dsw-alias-label-secondary,#8f959e);margin-top:3px }
+      .rd-memtopactions { margin-left:auto;display:flex;gap:6px }
+      .rd-memerror { margin-bottom:10px;padding:8px 10px;border:1px solid #f0cdcd;background:#fdecec;color:#b42318;border-radius:8px;font-size:11.5px }
+      .rd-memoff { display:flex;align-items:center;gap:12px;padding:16px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:11px;background:var(--dsw-alias-bg-layer-2,rgba(15,23,42,.02));margin-bottom:12px }
+      .rd-memoff .tt { font-size:12.5px;font-weight:600 }
+      .rd-memoff .td { font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e);margin-top:2px;line-height:1.5 }
+      .rd-memoff .rd-btn { margin-left:auto }
+      .rd-memws { display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px }
+      .rd-memwsbtn { height:26px;padding:0 9px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary,#5f6672);font-size:11px;display:inline-flex;align-items:center;gap:5px;cursor:pointer }
+      .rd-memwsbtn.on { background:var(--dsw-alias-bg-layer-2,#f6f7f9);color:var(--dsw-alias-label-primary,#1f2329);font-weight:600 }
+      .rd-memgrid { display:grid;gap:10px }
+      .rd-memcard { border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:11px;background:var(--dsw-alias-bg-layer-1,#fff);margin-bottom:10px;overflow:hidden }
+      .rd-memhead { display:flex;align-items:center;gap:7px;padding:10px 12px;border-bottom:1px solid rgba(15,23,42,.05);color:var(--dsw-alias-label-secondary,#5f6672) }
+      .rd-memhead .t { font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary,#1f2329) }
+      .rd-memhead .rt { margin-left:auto;font-size:10px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-membadge { font-size:9.5px;padding:1px 5px;border-radius:4px;background:rgba(15,23,42,.05);color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-membody { padding:10px 12px }
+      .rd-memkv { display:flex;gap:10px;padding:4px 0;font-size:11px }
+      .rd-memkv .k { flex:none;width:58px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-memkv .v { min-width:0;color:var(--dsw-alias-label-primary,#1f2329);line-height:1.6;word-break:break-word }
+      .rd-memswitchrow { display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(15,23,42,.05) }
+      .rd-memswitchrow:last-of-type { border-bottom:0 }
+      .rd-memswitchrow .tt { font-size:11.5px }
+      .rd-memswitchrow .td { font-size:10px;color:var(--dsw-alias-label-secondary,#8f959e);margin-top:1px }
+      .rd-memswitch { margin-left:auto;width:30px;height:18px;border:0;border-radius:999px;background:#dfe3e8;position:relative;cursor:pointer;flex:none;padding:0 }
+      .rd-memswitch span { position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15) }
+      .rd-memswitch.on { background:#2f7ddd }
+      .rd-memswitch.on span { left:auto;right:2px }
+      .rd-memscopes { display:flex;gap:2px;margin-left:8px }
+      .rd-memscopebtn { border:0;background:transparent;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e);padding:2px 5px;border-radius:5px;cursor:pointer }
+      .rd-memscopebtn.on { background:rgba(15,23,42,.06);color:var(--dsw-alias-label-primary,#1f2329);font-weight:600 }
+      .rd-memnote { display:flex;gap:8px;padding:8px 0;border-bottom:1px solid rgba(15,23,42,.05);align-items:flex-start }
+      .rd-memnote:last-child { border-bottom:0 }
+      .rd-memkind { flex:none;font-size:9.5px;padding:2px 5px;border-radius:4px;margin-top:1px }
+      .rd-memkind.fact { background:#e8f6ec;color:#1b7a33 }
+      .rd-memkind.preference { background:#f1edff;color:#6b4bd1 }
+      .rd-memkind.command { background:#eaf2fb;color:#175a99 }
+      .rd-memkind.caution { background:#fdf3df;color:#8a5a00 }
+      .rd-memkind.decision { background:#eef1f5;color:#3f4a59 }
+      .rd-memnote .body { min-width:0;flex:1 }
+      .rd-memnote .txt { font-size:11.5px;line-height:1.6 }
+      .rd-memnote .sub { margin-top:2px;font-size:10px;color:var(--dsw-alias-label-secondary,#8f959e);display:flex;gap:6px;flex-wrap:wrap }
+      .rd-memnote .ops { flex:none;display:flex;gap:2px }
+      .rd-memicon { border:0;background:transparent;color:var(--dsw-alias-label-secondary,#8f959e);cursor:pointer;padding:2px;border-radius:4px }
+      .rd-memicon:hover { background:rgba(15,23,42,.06);color:var(--dsw-alias-label-primary,#1f2329) }
+      .rd-memeditor { border-color:rgba(47,125,221,.35) }
+      .rd-memfield { display:flex;align-items:center;gap:8px;margin:8px 0;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e);flex-wrap:wrap }
+      .rd-memfield select,.rd-memfield .rd-meminput { height:28px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:7px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2329);font-size:11px;padding:0 7px }
+      .rd-memfield .rd-meminput { flex:1;min-width:120px }
+      .rd-memtextarea { width:100%;min-height:76px;resize:vertical;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:8px;padding:8px 9px;font:inherit;font-size:11.5px;line-height:1.6;color:var(--dsw-alias-label-primary,#1f2329);background:var(--dsw-alias-bg-layer-1,#fff);box-sizing:border-box }
+      .rd-memcheck { display:inline-flex;align-items:center;gap:5px }
+      .rd-memactions { display:flex;gap:6px;justify-content:flex-end;margin-top:8px }
+      .rd-memaside { position:sticky;top:0 }
+      .rd-memmeter { height:4px;border-radius:999px;background:rgba(15,23,42,.08);overflow:hidden;margin:5px 0 8px }
+      .rd-memmeter i { display:block;height:100%;background:#2f7ddd;border-radius:999px }
+      .rd-mempreview { margin:0;max-height:190px;overflow:auto;white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:9.5px;line-height:1.55;color:var(--dsw-alias-label-secondary,#5f6672);background:rgba(15,23,42,.03);border-radius:7px;padding:8px }
+      [data-rd-theme="dark"] .rd-memcard { background:#1b1e24;border-color:rgba(255,255,255,.1) }
+      [data-rd-theme="dark"] .rd-memhead,[data-rd-theme="dark"] .rd-memnote,[data-rd-theme="dark"] .rd-memswitchrow { border-color:rgba(255,255,255,.07) }
+      [data-rd-theme="dark"] .rd-memoff { background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.1) }
+      [data-rd-theme="dark"] .rd-memkind.fact { background:rgba(46,160,67,.18);color:#7ee2a0 }
+      [data-rd-theme="dark"] .rd-memkind.preference { background:rgba(124,92,255,.2);color:#c3b5ff }
+      [data-rd-theme="dark"] .rd-memkind.command { background:rgba(47,125,221,.2);color:#8cc6ff }
+      [data-rd-theme="dark"] .rd-memkind.caution { background:rgba(210,153,34,.2);color:#f0c66b }
+      [data-rd-theme="dark"] .rd-memkind.decision { background:rgba(255,255,255,.08);color:#c8ced8 }
+      [data-rd-theme="dark"] .rd-mempreview { background:rgba(255,255,255,.04) }
+
+      .rd-mem2 { max-width:980px }
+      .rd-chip.rd-mem-global { padding:4px 8px;gap:5px;color:var(--dsw-alias-label-secondary,#5f6672) }
+      .rd-chip.rd-mem-global:hover { background:var(--dsw-alias-border-l1, rgba(15,23,42,.05)) }
+      .rd-mem-globaldot { width:6px;height:6px;border-radius:50%;background:#2ea043;flex:none }
+      .rd-mem2-head { display:flex;align-items:flex-start;gap:12px;margin-bottom:14px }
+      .rd-mem2-title { font-size:16px;font-weight:650;letter-spacing:-.01em }
+      .rd-mem2-sub { margin-top:4px;font-size:10.8px;line-height:1.6;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-actions { margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end }
+      .rd-mem2-global { display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 9px 0 10px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:8px;background:var(--dsw-alias-bg-layer-1,#fff);font-size:11.5px;color:var(--dsw-alias-label-primary,#1f2329);cursor:pointer }
+      .rd-mem2-global:hover { background:var(--dsw-alias-bg-layer-2,rgba(15,23,42,.03)) }
+      .rd-mem2-state { font-size:10px;padding:1px 6px;border-radius:999px;background:rgba(15,23,42,.06);color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-state.on { background:#e8f6ec;color:#1b7a33 }
+      .rd-mem2-error { margin-bottom:12px;padding:9px 11px;border:1px solid #f0cdcd;background:#fdecec;color:#b42318;border-radius:8px;font-size:11.5px }
+      .rd-mem2-onboard { max-width:720px;padding:28px 30px 26px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:14px;background:linear-gradient(180deg,rgba(47,125,221,.045),rgba(47,125,221,0) 62%),var(--dsw-alias-bg-layer-1,#fff) }
+      .rd-mem2-onboardicon { width:42px;height:42px;border-radius:12px;background:#eaf2fb;color:#1d6fc4;display:grid;place-items:center;margin-bottom:12px }
+      .rd-mem2-onboardtitle { font-size:16px;font-weight:650 }
+      .rd-mem2-onboardsub { margin-top:6px;max-width:560px;font-size:11.5px;line-height:1.7;color:var(--dsw-alias-label-secondary,#5f6672) }
+      .rd-mem2-features { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:18px 0 20px }
+      .rd-mem2-feature { padding:11px 12px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.08));border-radius:9px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#5f6672) }
+      .rd-mem2-feature .n { margin-top:7px;font-size:11.5px;font-weight:600;color:var(--dsw-alias-label-primary,#1f2329) }
+      .rd-mem2-feature .d { margin-top:3px;font-size:10px;line-height:1.55;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-onboardactions { display:flex;align-items:center;gap:8px }
+      .rd-mem2-toolbar { display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:11px;background:var(--dsw-alias-bg-layer-2,rgba(15,23,42,.025));margin-bottom:12px }
+      .rd-mem2-host { display:flex;align-items:center;gap:7px;font-size:12px }
+      .rd-mem2-toolbartag { font-size:9.5px;color:var(--dsw-alias-label-secondary,#8f959e);border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:4px;padding:1px 5px }
+      .rd-mem2-toolbarswitch { display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-switch { margin-left:auto;width:30px;height:18px;border:0;border-radius:999px;background:#dfe3e8;position:relative;cursor:pointer;flex:none;padding:0 }
+      .rd-mem2-switch span { position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15) }
+      .rd-mem2-switch.on { background:#2f7ddd }
+      .rd-mem2-switch.on span { left:auto;right:2px }
+      .rd-mem2-ws { display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-left:auto }
+      .rd-mem2-wschip { height:24px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#5f6672);font-size:10.5px;display:inline-flex;align-items:center;gap:5px;cursor:pointer }
+      .rd-mem2-wschip.on { background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2329);font-weight:600 }
+      .rd-mem2-hint { font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-summary { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:12px }
+      .rd-mem2-stat { padding:10px 12px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:10px;background:var(--dsw-alias-bg-layer-1,#fff) }
+      .rd-mem2-stat .k { font-size:10px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-stat .v { margin-top:3px;font-size:13px;font-weight:650 }
+      .rd-mem2-stat .h { margin-top:2px;font-size:9.5px;color:var(--dsw-alias-label-secondary,#8f959e);white-space:nowrap;overflow:hidden;text-overflow:ellipsis }
+      .rd-mem2-card { border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:11px;background:var(--dsw-alias-bg-layer-1,#fff);margin-bottom:11px;overflow:hidden }
+      .rd-mem2-cardhead { display:flex;align-items:center;gap:8px;min-height:44px;padding:0 13px;border-bottom:1px solid rgba(15,23,42,.05);color:var(--dsw-alias-label-secondary,#5f6672) }
+      .rd-mem2-cardtitle { display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary,#1f2329) }
+      .rd-mem2-badge { font-size:9.5px;padding:1px 5px;border-radius:4px;background:rgba(15,23,42,.05);color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-cardactions { margin-left:auto;display:flex;align-items:center;gap:6px }
+      .rd-mem2-cardbody { padding:4px 13px 10px }
+      .rd-mem2-section { padding:9px 0;border-bottom:1px solid rgba(15,23,42,.05) }
+      .rd-mem2-section:last-child { border-bottom:0 }
+      .rd-mem2-sectionhead { display:flex;align-items:center;gap:8px;margin-bottom:3px }
+      .rd-mem2-label { font-size:10.5px;font-weight:600;color:var(--dsw-alias-label-secondary,#5f6672) }
+      .rd-mem2-meta { font-size:9.8px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-row { display:flex;gap:10px;padding:3px 0;font-size:11px }
+      .rd-mem2-row .k { flex:none;min-width:62px;max-width:38%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-row .v { flex:1;min-width:0;line-height:1.6;word-break:break-word }
+      .rd-mem2-emptyline { padding:8px 0;font-size:10.8px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-tabs { display:flex;gap:2px;margin-left:8px }
+      .rd-mem2-tab { border:0;background:transparent;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e);padding:2px 6px;border-radius:5px;cursor:pointer }
+      .rd-mem2-tab.on { background:rgba(15,23,42,.06);color:var(--dsw-alias-label-primary,#1f2329);font-weight:600 }
+      .rd-mem2-count { font-size:10px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-note { display:flex;gap:8px;padding:9px 0;border-bottom:1px solid rgba(15,23,42,.05);align-items:flex-start }
+      .rd-mem2-note:last-child { border-bottom:0 }
+      .rd-mem2-kind { flex:none;font-size:9.5px;padding:2px 5px;border-radius:4px;margin-top:1px }
+      .rd-mem2-kind.fact { background:#e8f6ec;color:#1b7a33 }
+      .rd-mem2-kind.preference { background:#f1edff;color:#6b4bd1 }
+      .rd-mem2-kind.command { background:#eaf2fb;color:#175a99 }
+      .rd-mem2-kind.caution { background:#fdf3df;color:#8a5a00 }
+      .rd-mem2-kind.decision { background:#eef1f5;color:#3f4a59 }
+      .rd-mem2-note .body { min-width:0;flex:1 }
+      .rd-mem2-note .txt { font-size:11.5px;line-height:1.65 }
+      .rd-mem2-note .sub { margin-top:2px;font-size:9.8px;color:var(--dsw-alias-label-secondary,#8f959e);display:flex;gap:6px;flex-wrap:wrap }
+      .rd-mem2-note .ops { flex:none;display:flex;gap:2px }
+      .rd-mem2-icon { border:0;background:transparent;color:var(--dsw-alias-label-secondary,#8f959e);cursor:pointer;padding:3px;border-radius:4px }
+      .rd-mem2-icon:hover { background:rgba(15,23,42,.06);color:var(--dsw-alias-label-primary,#1f2329) }
+      .rd-mem2-inject { border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:10px;background:var(--dsw-alias-bg-layer-1,#fff);padding:0 12px;margin-top:2px }
+      .rd-mem2-inject summary { display:flex;align-items:center;gap:7px;height:38px;cursor:pointer;font-size:10.8px;color:var(--dsw-alias-label-secondary,#5f6672);list-style:none }
+      .rd-mem2-inject summary::-webkit-details-marker { display:none }
+      .rd-mem2-injectmeta { margin-left:auto;font-size:9.8px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-inject pre { margin:0 0 10px;max-height:190px;overflow:auto;white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:9.5px;line-height:1.55;color:var(--dsw-alias-label-secondary,#5f6672);background:rgba(15,23,42,.03);border-radius:7px;padding:8px }
+      .rd-mem2-overlay { position:fixed;inset:0;background:rgba(18,22,29,.34);z-index:80;display:grid;place-items:center;padding:20px }
+      .rd-mem2-modal { width:min(600px,100%);max-height:min(720px,calc(100vh - 40px));display:flex;flex-direction:column;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:14px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:0 24px 70px rgba(16,24,40,.26);overflow:hidden }
+      .rd-mem2-modalhead { display:flex;align-items:flex-start;gap:10px;padding:16px 18px 12px;border-bottom:1px solid rgba(15,23,42,.06) }
+      .rd-mem2-modalhead .t { font-size:14px;font-weight:650 }
+      .rd-mem2-modalhead .s { margin-top:3px;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-modalhead .rd-mem2-icon { margin-left:auto }
+      .rd-mem2-modalbody { padding:8px 18px 4px;overflow:auto }
+      .rd-mem2-modalfoot { display:flex;align-items:center;gap:8px;justify-content:flex-end;padding:12px 18px 16px;border-top:1px solid rgba(15,23,42,.06);margin-top:8px }
+      .rd-mem2-modalfoot .rd-mem2-meta { margin-right:auto }
+      .rd-mem2-settingrow { display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(15,23,42,.06) }
+      .rd-mem2-settingrow .tt { font-size:11.5px;font-weight:500 }
+      .rd-mem2-settingrow .td { margin-top:2px;font-size:10px;color:var(--dsw-alias-label-secondary,#8f959e);line-height:1.5 }
+      .rd-mem2-settingrow .rd-mem2-switch { margin-left:auto }
+      .rd-mem2-budget { margin-left:auto;display:flex;align-items:center;gap:6px }
+      .rd-mem2-budget input { width:72px;height:28px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:7px;padding:0 7px;font:inherit;font-size:11px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2329) }
+      .rd-mem2-pluginnotes { padding:12px 0 4px;border-bottom:1px solid rgba(15,23,42,.06) }
+      .rd-mem2-pluginnoteshead { display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:500 }
+      .rd-mem2-pluginnoteshead .rd-btn { margin-left:auto }
+      .rd-mem2-datapath { padding:10px 0 4px;font-size:9.8px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-formrow { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:9px 0;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem2-formrow select { height:28px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:7px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2329);font-size:11px;padding:0 7px }
+      .rd-mem2-formrow .rd-mem2-input { flex:1;min-width:120px;height:28px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:7px;padding:0 8px;font:inherit;font-size:11px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2329) }
+      .rd-mem2-textarea { width:100%;min-height:88px;resize:vertical;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:8px;padding:8px 9px;font:inherit;font-size:11.5px;line-height:1.6;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2329);box-sizing:border-box }
+      .rd-mem2-check { display:inline-flex;align-items:center;gap:5px }
+
+      .rd-mem3 { max-width:980px }
+      .rd-mem3-head { display:flex;align-items:flex-start;gap:12px;margin-bottom:10px }
+      .rd-mem3-title { font-size:16px;font-weight:650;letter-spacing:-.01em }
+      .rd-mem3-sub { margin-top:3px;font-size:11px;line-height:1.6;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-mem3-actions { margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end }
+      .rd-mem3-error { margin-bottom:10px;padding:8px 11px;border:1px solid #f0cdcd;background:#fdecec;color:#b42318;border-radius:8px;font-size:11.5px }
+      .rd-mem3-onboard { max-width:560px;padding:22px 24px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:12px;background:var(--dsw-alias-bg-layer-1,#fff) }
+      .rd-mem3-onboard .ic { width:38px;height:38px;border-radius:10px;background:#eaf2fb;color:#1d6fc4;display:grid;place-items:center;margin-bottom:10px }
+      .rd-mem3-onboard .tt { font-size:15px;font-weight:650 }
+      .rd-mem3-onboard .ts { margin:5px 0 14px;font-size:11.5px;line-height:1.7;color:var(--dsw-alias-label-secondary,#5f6672) }
+
+      .rd-layer { border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:11px;background:var(--dsw-alias-bg-layer-1,#fff);margin-bottom:10px;overflow:hidden }
+      .rd-layer.workspace { border-color:rgba(47,125,221,.32) }
+      .rd-layer-head { display:flex;align-items:center;gap:10px;padding:9px 14px 7px }
+      .rd-layer-icon { width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none;background:rgba(120,130,145,.16);color:#6b7684 }
+      .rd-layer.workspace .rd-layer-icon { background:rgba(47,125,221,.13);color:#2f7ddd }
+      .rd-layer-title { min-width:0 }
+      .rd-layer-title .t { display:flex;align-items:center;gap:7px;font-size:13px;font-weight:650 }
+      .rd-layer-title .s { margin-top:2px;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e);display:flex;align-items:center;gap:4px }
+      .rd-layer-badge { font-size:9.5px;font-weight:500;padding:1px 6px;border-radius:4px;color:var(--dsw-alias-label-secondary,#5f6672);background:rgba(15,23,42,.06) }
+      .rd-layer.workspace .rd-layer-badge { color:#175a99;background:rgba(47,125,221,.14) }
+      .rd-live { color:#2ea043;font-size:9px }
+      .rd-layer-right { margin-left:auto;display:flex;align-items:center;gap:9px;flex:none }
+      .rd-layer-switchlabel { font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-switch { width:32px;height:18px;border:0;border-radius:999px;background:#dfe3e8;position:relative;cursor:pointer;flex:none;padding:0 }
+      .rd-switch span { position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15) }
+      .rd-switch.on { background:#2f7ddd }
+      .rd-switch.on span { left:auto;right:2px }
+      .rd-switch:disabled { opacity:.5;cursor:default }
+      .rd-wschips { display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end }
+      .rd-wschip { display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary,#5f6672);font:inherit;font-size:11px;cursor:pointer;max-width:220px }
+      .rd-wschip > :first-child { overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+      .rd-wschip.on { border-color:rgba(47,125,221,.5);background:rgba(47,125,221,.1);color:#175a99;font-weight:600 }
+      .rd-wschip .n { flex:none;font-size:9.5px;padding:0 4px;border-radius:3px;background:rgba(15,23,42,.07);color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-wschip.on .n { background:rgba(47,125,221,.18);color:#175a99 }
+      .rd-pathline { display:flex;align-items:center;gap:7px;margin:0 14px 2px;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-pathline code { font-family:ui-monospace,Consolas,monospace;font-size:10px;color:var(--dsw-alias-label-secondary,#5f6672);background:rgba(15,23,42,.05);border-radius:4px;padding:1px 5px }
+      .rd-subhead { display:flex;align-items:center;gap:8px;padding:5px 14px 2px }
+      .rd-subhead .t { font-size:10.5px;font-weight:600;color:var(--dsw-alias-label-secondary,#5f6672) }
+      .rd-subhead .meta { font-size:10px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-subhead-right { margin-left:auto;display:flex;align-items:center;gap:8px }
+      .rd-count { font-size:10px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-facts { padding:2px 14px 6px }
+      .rd-fact { display:flex;gap:10px;padding:2px 0 }
+      .rd-fact .k { flex:none;min-width:62px;max-width:34%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-fact .v { flex:1;min-width:0;font-size:11.5px;line-height:1.65;word-break:break-word }
+      .rd-fact .v.clamp2 { display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden }
+      .rd-fact.clampable .v { cursor:pointer }
+      .rd-fact-more { flex:none;align-self:flex-start;margin-top:1px;border:0;background:transparent;padding:0 2px;font:inherit;font-size:10px;color:var(--dsw-alias-brand-primary,#1d6fc4);cursor:pointer;opacity:.85 }
+      .rd-fact-more:hover { opacity:1;text-decoration:underline }
+      .rd-fact.sub .v { color:var(--dsw-alias-label-secondary,#5f6672);font-size:11px }
+      .rd-fact.sub .k { padding-left:10px;font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:var(--dsw-alias-label-secondary,#5f6672) }
+      .rd-divider { height:1px;background:rgba(15,23,42,.06);margin:2px 0 }
+      .rd-blank { padding:8px 0 10px;font-size:11px;line-height:1.6;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-layer > .rd-blank, .rd-layer > .rd-facts + .rd-blank { padding-left:14px;padding-right:14px }
+      .rd-notes { padding:2px 14px 8px }
+      .rd-note { display:flex;gap:9px;padding:6px 0;border-bottom:1px solid rgba(15,23,42,.055);align-items:flex-start }
+      .rd-note:last-child { border-bottom:0 }
+      .rd-note.archived { opacity:.6 }
+      .rd-note-kind { flex:none;font-size:9.5px;padding:2px 6px;border-radius:4px;margin-top:1px }
+      .rd-note-kind.fact { background:#e8f6ec;color:#1b7a33 }
+      .rd-note-kind.preference { background:#f1edff;color:#6b4bd1 }
+      .rd-note-kind.command { background:#eaf2fb;color:#175a99 }
+      .rd-note-kind.caution { background:#fdf3df;color:#8a5a00 }
+      .rd-note-kind.decision { background:#eef1f5;color:#3f4a59 }
+      .rd-note-body { flex:1;min-width:0 }
+      .rd-note-txt { font-size:11.5px;line-height:1.6 }
+      .rd-note-sub { margin-top:1px;font-size:9.5px;color:var(--dsw-alias-label-secondary,#8f959e);display:flex;gap:5px;flex-wrap:wrap }
+      .rd-note-ops { flex:none;display:flex;gap:8px }
+      .rd-note-op { border:0;background:transparent;padding:1px 0;font:inherit;font-size:10px;color:var(--dsw-alias-label-secondary,#8f959e);cursor:pointer }
+      .rd-note-op:hover { color:var(--dsw-alias-brand-primary,#1d6fc4) }
+      .rd-note-op:disabled { opacity:.5;cursor:default }
+      .rd-raw { margin:2px 0 0;border-top:1px dashed var(--dsw-alias-border-l1,rgba(15,23,42,.08));padding:0 14px 8px;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-raw summary { height:26px;display:flex;align-items:center;cursor:pointer;list-style:none }
+      .rd-raw summary::-webkit-details-marker { display:none }
+      .rd-raw summary::before { content:'▸';margin-right:5px;font-size:9px }
+      .rd-raw[open] summary::before { content:'▾' }
+      .rd-raw pre { margin:2px 0 4px;max-height:220px;overflow:auto;padding:8px;border-radius:7px;background:rgba(15,23,42,.04);font-family:ui-monospace,Consolas,monospace;font-size:9.5px;line-height:1.5;white-space:pre-wrap }
+      .rd-inject { border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:9px;background:var(--dsw-alias-bg-layer-1,#fff);padding:0 12px }
+      .rd-inject summary { display:flex;align-items:center;gap:7px;height:32px;cursor:pointer;font-size:11px;color:var(--dsw-alias-label-secondary,#5f6672);list-style:none }
+      .rd-inject summary::-webkit-details-marker { display:none }
+      .rd-injectmeta { margin-left:auto;font-size:10px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-inject pre { margin:0 0 9px;max-height:300px;overflow:auto;white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:9.5px;line-height:1.55;color:var(--dsw-alias-label-secondary,#5f6672);background:rgba(15,23,42,.03);border-radius:7px;padding:8px }
+
+      .rd-dlg-overlay { position:fixed;inset:0;background:rgba(10,12,16,.55);z-index:80;display:grid;place-items:center;padding:20px }
+      .rd-dlg { width:min(512px,100%);max-height:calc(100vh - 40px);display:flex;flex-direction:column;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:13px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:0 26px 70px rgba(16,24,40,.3);overflow:hidden }
+      .rd-dlg-head { display:flex;align-items:flex-start;gap:10px;padding:15px 16px 11px }
+      .rd-dlg-head .t { font-size:14px;font-weight:650 }
+      .rd-dlg-head .s { margin-top:3px;font-size:10.5px;line-height:1.55;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-dlg-x { margin-left:auto;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#8f959e);cursor:pointer;padding:2px;border-radius:4px }
+      .rd-dlg-x:hover { background:rgba(15,23,42,.06) }
+      .rd-dlg-body { padding:2px 16px 4px;overflow:auto }
+      .rd-dlg-target { display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:8px;background:rgba(47,125,221,.09);border:1px solid rgba(47,125,221,.26);font-size:11px;color:#175a99;margin-bottom:13px }
+      .rd-dlg-target.machine { background:rgba(15,23,42,.04);border-color:var(--dsw-alias-border-l1,rgba(15,23,42,.1));color:var(--dsw-alias-label-secondary,#5f6672) }
+      .rd-dlg-target code { font-family:ui-monospace,Consolas,monospace;font-size:10px;color:var(--dsw-alias-label-secondary,#5f6672) }
+      .rd-dlg-field { margin-bottom:12px }
+      .rd-dlg-label { font-size:10.5px;color:var(--dsw-alias-label-secondary,#5f6672);margin-bottom:6px }
+      .rd-dlg-chips { display:flex;gap:6px;flex-wrap:wrap }
+      .rd-dlg-chip { height:27px;padding:0 11px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary,#5f6672);font:inherit;font-size:11px;cursor:pointer }
+      .rd-dlg-chip.on { border-color:rgba(47,125,221,.55);background:rgba(47,125,221,.12);color:#175a99;font-weight:600 }
+      .rd-dlg-textarea { width:100%;min-height:84px;resize:vertical;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:8px;padding:9px 10px;font:inherit;font-size:11.5px;line-height:1.6;background:transparent;color:var(--dsw-alias-label-primary,#1f2329);box-sizing:border-box }
+      .rd-dlg-counter { margin-top:4px;text-align:right;font-size:9.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-dlg-inline { display:flex;align-items:center;gap:10px }
+      .rd-dlg-input { flex:1;min-width:0;height:28px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:7px;padding:0 9px;font:inherit;font-size:11px;background:transparent;color:var(--dsw-alias-label-primary,#1f2329) }
+      .rd-dlg-check { display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary,#5f6672);white-space:nowrap }
+      .rd-dlg-foot { display:flex;align-items:center;gap:8px;padding:11px 16px 13px;border-top:1px solid rgba(15,23,42,.06);margin-top:6px }
+      .rd-dlg-hint { margin-right:auto;font-size:9.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      [data-rd-theme="dark"] .rd-mem3-onboard,[data-rd-theme="dark"] .rd-layer,[data-rd-theme="dark"] .rd-dlg,[data-rd-theme="dark"] .rd-inject { background:#1b1e24;border-color:rgba(255,255,255,.1) }
+      [data-rd-theme="dark"] .rd-layer.workspace { border-color:rgba(47,125,221,.4) }
+      [data-rd-theme="dark"] .rd-layer-badge { background:rgba(255,255,255,.07);color:#b9c0c9 }
+      [data-rd-theme="dark"] .rd-layer.workspace .rd-layer-badge { background:rgba(47,125,221,.2);color:#8cc0f5 }
+      [data-rd-theme="dark"] .rd-layer-icon { background:rgba(120,130,145,.18);color:#a9b1bd }
+      [data-rd-theme="dark"] .rd-layer.workspace .rd-layer-icon { background:rgba(47,125,221,.16);color:#6ea9ea }
+      [data-rd-theme="dark"] .rd-switch { background:#3a3f47 }
+      [data-rd-theme="dark"] .rd-switch.on { background:#2f7ddd }
+      [data-rd-theme="dark"] .rd-wschip { border-color:rgba(255,255,255,.1);color:#9aa1ab }
+      [data-rd-theme="dark"] .rd-wschip.on { border-color:rgba(47,125,221,.55);background:rgba(47,125,221,.16);color:#cfe3f9 }
+      [data-rd-theme="dark"] .rd-wschip .n { background:rgba(255,255,255,.08);color:#9aa1ab }
+      [data-rd-theme="dark"] .rd-wschip.on .n { background:rgba(255,255,255,.16);color:#dbe9f8 }
+      [data-rd-theme="dark"] .rd-pathline code { background:rgba(255,255,255,.05);color:#b9c0c9 }
+      [data-rd-theme="dark"] .rd-raw { border-color:rgba(255,255,255,.08) }
+      [data-rd-theme="dark"] .rd-raw pre { background:rgba(255,255,255,.04) }
+      [data-rd-theme="dark"] .rd-divider,[data-rd-theme="dark"] .rd-note { border-color:rgba(255,255,255,.06) }
+      [data-rd-theme="dark"] .rd-dlg-foot { border-color:rgba(255,255,255,.06) }
+      [data-rd-theme="dark"] .rd-dlg-target { background:rgba(47,125,221,.14);border-color:rgba(47,125,221,.32);color:#cfe3f9 }
+      [data-rd-theme="dark"] .rd-dlg-target.machine { background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:#9aa1ab }
+      [data-rd-theme="dark"] .rd-dlg-target code { color:#9fc7f0 }
+      [data-rd-theme="dark"] .rd-dlg-chip.on { border-color:rgba(47,125,221,.6);background:rgba(47,125,221,.18);color:#cfe3f9 }
+      [data-rd-theme="dark"] .rd-note-kind.fact { background:rgba(63,185,80,.16);color:#7ee2a0 }
+      [data-rd-theme="dark"] .rd-note-kind.preference { background:rgba(124,92,255,.2);color:#c3b5ff }
+      [data-rd-theme="dark"] .rd-note-kind.command { background:rgba(47,125,221,.2);color:#8cc6ff }
+      [data-rd-theme="dark"] .rd-note-kind.caution { background:rgba(210,153,34,.2);color:#f0c66b }
+      [data-rd-theme="dark"] .rd-note-kind.decision { background:rgba(255,255,255,.08);color:#c8ced8 }
+      [data-rd-theme="dark"] .rd-inject pre { background:rgba(255,255,255,.04) }
+
+      .rd-set { flex:1;min-height:0;display:grid;grid-template-columns:190px minmax(0,1fr) }
+      .rd-set-nav { display:flex;flex-direction:column;gap:3px;padding:18px 10px 14px;border-right:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.08));background:var(--dsw-alias-bg-layer-2,rgba(15,23,42,.02)) }
+      .rd-set-navtitle { padding:0 9px 10px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-set-navitem { display:flex;align-items:center;gap:7px;height:32px;padding:0 9px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary,#5f6672);font:inherit;font-size:12px;text-align:left;cursor:pointer }
+      .rd-set-navitem:hover { background:var(--dsw-alias-border-l1,rgba(15,23,42,.05)) }
+      .rd-set-navitem.on { background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2329);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.06) }
+      .rd-set-navfoot { margin-top:auto;padding:10px 9px 0;font-size:9.5px;color:var(--dsw-alias-label-secondary,#8f959e);border-top:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.06)) }
+      .rd-set-main { min-width:0;overflow:auto;padding:22px 26px 32px }
+      .rd-set-head { margin-bottom:14px }
+      .rd-set-head .t { font-size:17px;font-weight:650;letter-spacing:-.01em }
+      .rd-set-head .s { margin-top:4px;font-size:11.5px;line-height:1.65;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-set-error { margin-bottom:12px;padding:9px 11px;border:1px solid #f0cdcd;background:#fdecec;color:#b42318;border-radius:8px;font-size:11.5px }
+      .rd-set-card { max-width:780px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.1));border-radius:11px;background:var(--dsw-alias-bg-layer-1,#fff);padding:4px 16px 10px;margin-bottom:12px }
+      .rd-set-cardhead { display:flex;align-items:center;gap:8px;padding:12px 0 4px;font-size:12.5px;font-weight:600 }
+      .rd-set-cardhead .rd-btn { margin-left:auto }
+      .rd-set-row { display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.06)) }
+      .rd-set-row:last-child { border-bottom:0 }
+      .rd-set-row .tt { font-size:12.5px;font-weight:500 }
+      .rd-set-row .td { margin-top:3px;font-size:10.8px;line-height:1.6;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-set-row .ctl { margin-left:auto;flex:none;display:flex;align-items:center;gap:7px }
+      .rd-set-switch { width:32px;height:19px;border:0;border-radius:999px;background:#dfe3e8;position:relative;cursor:pointer;flex:none;padding:0 }
+      .rd-set-switch span { position:absolute;left:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15) }
+      .rd-set-switch.on { background:#2f7ddd }
+      .rd-set-switch.on span { left:auto;right:2px }
+      .rd-set-switch:disabled { opacity:.45;cursor:default }
+      .rd-set-note { padding:8px 0 10px;font-size:10.5px;line-height:1.6;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-set-desc { padding:4px 0 8px;font-size:10.8px;line-height:1.65;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-set-seg { display:flex;gap:6px;padding:2px 0 10px }
+      .rd-set-segbtn { min-width:64px;height:30px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary,#5f6672);font:inherit;font-size:11px;cursor:pointer }
+      .rd-set-segbtn.on { border-color:#a9c9ec;background:rgba(47,125,221,.08);color:#175a99;font-weight:600 }
+      .rd-set-empty { padding:8px 0;font-size:10.8px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-set-noteitem { display:flex;gap:8px;padding:9px 0;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.06));align-items:flex-start }
+      .rd-set-noteitem:last-child { border-bottom:0 }
+      .rd-set-kind { flex:none;font-size:9.5px;padding:2px 5px;border-radius:4px;margin-top:1px }
+      .rd-set-kind.fact { background:#e8f6ec;color:#1b7a33 }
+      .rd-set-kind.preference { background:#f1edff;color:#6b4bd1 }
+      .rd-set-kind.command { background:#eaf2fb;color:#175a99 }
+      .rd-set-kind.caution { background:#fdf3df;color:#8a5a00 }
+      .rd-set-kind.decision { background:#eef1f5;color:#3f4a59 }
+      .rd-set-noteitem .body { min-width:0;flex:1 }
+      .rd-set-noteitem .txt { font-size:11.5px;line-height:1.6 }
+      .rd-set-noteitem .sub { margin-top:2px;font-size:9.8px;color:var(--dsw-alias-label-secondary,#8f959e) }
+      .rd-set-noteitem .ops { flex:none;display:flex;gap:2px }
+      .rd-set-icon { border:0;background:transparent;color:var(--dsw-alias-label-secondary,#8f959e);cursor:pointer;padding:3px;border-radius:4px }
+      .rd-set-icon:hover { background:rgba(15,23,42,.06);color:var(--dsw-alias-label-primary,#1f2329) }
+      .rd-set-path { display:inline-block;font-family:ui-monospace,Consolas,monospace;font-size:10px;color:#5a6270;background:rgba(15,23,42,.04);border-radius:5px;padding:2px 6px }
+      .rd-set-value { font-size:12px;font-weight:600 }
+      [data-rd-theme="dark"] .rd-set-nav { background:rgba(255,255,255,.02);border-color:rgba(255,255,255,.08) }
+      [data-rd-theme="dark"] .rd-set-navitem.on { background:rgba(255,255,255,.06) }
+      [data-rd-theme="dark"] .rd-set-card { background:#1b1e24;border-color:rgba(255,255,255,.1) }
+      [data-rd-theme="dark"] .rd-set-row,[data-rd-theme="dark"] .rd-set-noteitem { border-color:rgba(255,255,255,.07) }
+      [data-rd-theme="dark"] .rd-set-path { background:rgba(255,255,255,.06);color:#c8ced8 }
+      [data-rd-theme="dark"] .rd-set-kind.fact { background:rgba(46,160,67,.18);color:#7ee2a0 }
+      [data-rd-theme="dark"] .rd-set-kind.preference { background:rgba(124,92,255,.2);color:#c3b5ff }
+      [data-rd-theme="dark"] .rd-set-kind.command { background:rgba(47,125,221,.2);color:#8cc6ff }
+      [data-rd-theme="dark"] .rd-set-kind.caution { background:rgba(210,153,34,.2);color:#f0c66b }
+      [data-rd-theme="dark"] .rd-set-kind.decision { background:rgba(255,255,255,.08);color:#c8ced8 }
+
+      [data-rd-theme="dark"] .rd-mem2-card,[data-rd-theme="dark"] .rd-mem2-stat,[data-rd-theme="dark"] .rd-mem2-toolbar,[data-rd-theme="dark"] .rd-mem2-inject,[data-rd-theme="dark"] .rd-mem2-modal { background:#1b1e24;border-color:rgba(255,255,255,.1) }
+      [data-rd-theme="dark"] .rd-mem2-onboard { background:linear-gradient(180deg,rgba(47,125,221,.12),rgba(47,125,221,0) 70%),#1b1e24;border-color:rgba(255,255,255,.1) }
+      [data-rd-theme="dark"] .rd-mem2-cardhead,[data-rd-theme="dark"] .rd-mem2-note,[data-rd-theme="dark"] .rd-mem2-section { border-color:rgba(255,255,255,.07) }
+      [data-rd-theme="dark"] .rd-mem2-kind.fact { background:rgba(46,160,67,.18);color:#7ee2a0 }
+      [data-rd-theme="dark"] .rd-mem2-kind.preference { background:rgba(124,92,255,.2);color:#c3b5ff }
+      [data-rd-theme="dark"] .rd-mem2-kind.command { background:rgba(47,125,221,.2);color:#8cc6ff }
+      [data-rd-theme="dark"] .rd-mem2-kind.caution { background:rgba(210,153,34,.2);color:#f0c66b }
+      [data-rd-theme="dark"] .rd-mem2-kind.decision { background:rgba(255,255,255,.08);color:#c8ced8 }
+      [data-rd-theme="dark"] .rd-mem2-state.on { background:rgba(46,160,67,.2);color:#7ee2a0 }
+      [data-rd-theme="dark"] .rd-mem2-inject pre { background:rgba(255,255,255,.04) }
 
       [data-rd-theme="dark"] .rd-pill { color:#8cc6ff;border-color:#2b4f74;background:rgba(47,125,221,.18) }
       [data-rd-theme="dark"] .rd-err { color:#ff9a9a }
@@ -893,12 +1292,16 @@ window.__ModuleLoader__.load({
           h('span', { className: 't', title: status ? (status.title + ' — ' + status.hint) : '' },
             status ? status.title : (connected.length > 0 ? '连接正常 · ' + connected.length + ' 台在线' : '未连接机器')),
           status ? h('span', { className: 'retry', onClick: () => void refresh() }, '重试') : null,
+          status && /失效|服务|超时/.test(status.title) ? h('span', { className: 'retry', onClick: () => location.reload() }, '重新加载') : null,
         ),
         h('div', { className: 'rd-body' },
           !ready
             ? h('div', { className: 'rd-notice' },
               h('b', { style: { display: 'block', marginBottom: 2 } }, '插件还没激活'),
               'DSH 需要重启一次才能加载 Remote Deck 的 host 部分。重启后这里会显示连接列表。')
+            : null,
+          status
+            ? h('div', { className: 'rd-notice' }, status.hint)
             : null,
           connections.length === 0 && ready
             ? h('div', { className: 'rd-hint' }, '还没有连接。添加一台 SSH 主机后，它的目录就能作为工作区。')
@@ -955,7 +1358,7 @@ window.__ModuleLoader__.load({
           h(Dot, { state: first ? first.status : 'disconnected' }),
           h('span', null, first ? first.name : '未配置'),
           first && first.sys ? h('span', { className: 'mono' }, '· ' + first.sys.os + ' ' + shortKernel(first.sys.kernel)) : null,
-          h('span', { style: { marginLeft: 'auto' } }, state ? 'host ' + state.build : ''),
+          h('span', { style: { marginLeft: 'auto' } }, state ? 'host ' + state.build + (error ? ' · 已断开' : '') : ''),
         ),
       )
     }
@@ -2392,15 +2795,708 @@ window.__ModuleLoader__.load({
       return (size / (1024 * 1024 * 1024)).toFixed(1) + ' GB'
     }
 
+    const NOTE_KIND_LABEL = {
+      fact: '事实',
+      preference: '偏好',
+      command: '命令',
+      caution: '注意',
+      decision: '决定',
+    }
+
+    const NOTE_KINDS = ['fact', 'preference', 'command', 'caution', 'decision']
+
+    function activeNotesOf(list) {
+      return (list || []).filter((note) => note.status === 'active')
+    }
+
+    function noteRowV3(note, scope, busy, handlers) {
+      const archived = note.status !== 'active'
+      return h('div', { className: 'rd-note' + (archived ? ' archived' : ''), key: note.id },
+        h('span', { className: 'rd-note-kind ' + note.kind }, NOTE_KIND_LABEL[note.kind] || note.kind),
+        h('div', { className: 'rd-note-body' },
+          h('div', { className: 'rd-note-txt' }, note.text),
+          h('div', { className: 'rd-note-sub' },
+            h('span', null, note.source && note.source.kind === 'model' ? '模型' : '你'),
+            h('span', null, '·'),
+            h('span', null, ago(note.updatedAt) || '刚刚'),
+            note.pinned ? h('span', null, '· 已固定') : null,
+            archived ? h('span', null, '· ' + (note.status === 'archived' ? '已归档' : '已被替换')) : null,
+          ),
+        ),
+        h('div', { className: 'rd-note-ops' },
+          archived
+            ? h('button', { className: 'rd-note-op', disabled: busy, onClick: () => handlers.restore(note) }, '恢复')
+            : h(React.Fragment, null,
+                h('button', { className: 'rd-note-op', disabled: busy, onClick: () => handlers.edit(note) }, '编辑'),
+                h('button', { className: 'rd-note-op', disabled: busy, onClick: () => handlers.archive(note) }, '归档'),
+              ),
+        ),
+      )
+    }
+
+    function NoteDialog({ scope, host, remotePath, workspaceName, note, busy, onClose, onSave }) {
+      const [kind, setKind] = React.useState(note ? note.kind : scope === 'machine' ? 'caution' : 'fact')
+      const [text, setText] = React.useState(note ? note.text : '')
+      const [tags, setTags] = React.useState(note ? note.tags.join(', ') : '')
+      const [pinned, setPinned] = React.useState(note ? note.pinned : false)
+      const editing = Boolean(note && note.id)
+      const title = (editing ? '编辑' : '添加') + (scope === 'machine' ? '机器笔记' : '工作区笔记')
+      const canSave = text.trim().length > 0 && !busy
+
+      return h('div', { className: 'rd-dlg-overlay', onClick: onClose },
+        h('div', { className: 'rd-dlg', onClick: (event) => event.stopPropagation() },
+          h('div', { className: 'rd-dlg-head' },
+            h('div', null,
+              h('div', { className: 't' }, title),
+              h('div', { className: 's' }, scope === 'machine'
+                ? '注入到 ' + host.name + ' 上所有工作区的会话；从下一次请求开始生效。'
+                : '只注入到 ' + (workspaceName || remotePath) + ' 的会话；从下一次请求开始生效。'),
+            ),
+            h('button', { className: 'rd-dlg-x', onClick: onClose }, h(Icon, { name: 'x', size: 14 })),
+          ),
+          h('div', { className: 'rd-dlg-body' },
+            h('div', { className: 'rd-dlg-target' + (scope === 'machine' ? ' machine' : '') },
+              h(Icon, { name: scope === 'machine' ? 'server' : 'folder', size: 13 }),
+              h('span', null, scope === 'machine' ? '机器 · ' + host.name : '工作区 · ' + (workspaceName || remotePath)),
+              h('code', null, scope === 'machine' ? '所有工作区共享' : remotePath),
+            ),
+            h('div', { className: 'rd-dlg-field' },
+              h('div', { className: 'rd-dlg-label' }, '类型'),
+              h('div', { className: 'rd-dlg-chips' },
+                NOTE_KINDS.map((id) => h('button', {
+                  key: id,
+                  className: 'rd-dlg-chip' + (kind === id ? ' on' : ''),
+                  onClick: () => setKind(id),
+                }, NOTE_KIND_LABEL[id] || id)),
+              ),
+            ),
+            h('div', { className: 'rd-dlg-field' },
+              h('div', { className: 'rd-dlg-label' }, '内容'),
+              h('textarea', {
+                className: 'rd-dlg-textarea',
+                value: text,
+                maxLength: 500,
+                autoFocus: true,
+                placeholder: scope === 'machine'
+                  ? '这台机器特有的：内网镜像、权限、固定路径、外网限制。'
+                  : '这个仓库特有的：构建顺序、生成物、坑。',
+                onChange: (event) => setText(event.target.value),
+              }),
+              h('div', { className: 'rd-dlg-counter' }, text.length + ' / 500'),
+            ),
+            h('div', { className: 'rd-dlg-field' },
+              h('div', { className: 'rd-dlg-inline' },
+                h('input', {
+                  className: 'rd-dlg-input',
+                  value: tags,
+                  placeholder: '标签，用逗号分隔（可选）',
+                  onChange: (event) => setTags(event.target.value),
+                }),
+                h('label', { className: 'rd-dlg-check' },
+                  h('input', { type: 'checkbox', checked: pinned, onChange: (event) => setPinned(event.target.checked) }),
+                  '固定到注入顶部',
+                ),
+              ),
+            ),
+          ),
+          h('div', { className: 'rd-dlg-foot' },
+            h('span', { className: 'rd-dlg-hint' }, '敏感内容（密钥、token）会被拒绝保存'),
+            h('button', { className: 'rd-btn', onClick: onClose, disabled: busy }, '取消'),
+            h('button', {
+              className: 'rd-btn primary',
+              disabled: !canSave,
+              onClick: () => onSave({ kind, text, tags, pinned }),
+            }, busy ? '保存中…' : '保存'),
+          ),
+        ),
+      )
+    }
+
+    function MemoryPanel({ host, hostWorkspaces }) {
+      const [data, setData] = React.useState(null)
+      const [path, setPath] = React.useState('')
+      const [editor, setEditor] = React.useState(null)
+      const [error, setError] = React.useState('')
+      const [busy, setBusy] = React.useState('')
+      const [loading, setLoading] = React.useState(true)
+      const [expandedFacts, setExpandedFacts] = React.useState(() => new Set())
+
+      const workspaceKey = hostWorkspaces.map((row) => row.path).join('|')
+      React.useEffect(() => {
+        const first = (hostWorkspaces[0] || {}).path || ''
+        setPath((current) => (hostWorkspaces.some((row) => row.path === current) ? current : first))
+      }, [host.id, workspaceKey])
+
+      const workspacePaths = React.useMemo(() => hostWorkspaces.map((row) => row.path), [workspaceKey])
+
+      const load = React.useCallback(async (remotePath) => {
+        setLoading(true)
+        setError('')
+        try {
+          let query = '/memory?connectionId=' + encodeURIComponent(host.id) + '&path=' + encodeURIComponent(remotePath || '')
+          for (const item of workspacePaths) query += '&wp=' + encodeURIComponent(item)
+          setData(await call(query))
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+        setLoading(false)
+      }, [host.id, workspacePaths.join('|')])
+
+      React.useEffect(() => {
+        void load(path)
+      }, [load, path])
+
+      const settings = (data && data.settings) || {}
+      const machineOn = data ? data.machineEnabled === true : false
+      const machineBrief = data && data.machine && data.machine.brief
+      const machineNotes = (data && data.machine && data.machine.notes) || []
+      const workspaceBrief = data && data.workspace && data.workspace.brief
+      const workspaceNotes = (data && data.workspace && data.workspace.notes) || []
+      const preview = (data && data.preview) || { text: '', bytes: 0, limit: 2000 }
+      const counts = {}
+      for (const row of (data && data.workspaces) || []) counts[row.path] = row.noteCount
+      const currentName = (hostWorkspaces.find((row) => row.path === path) || {}).folder || path
+      const latency = host.latencyMs !== undefined && host.latencyMs !== null ? Math.round(host.latencyMs) + 'ms' : ''
+      const connected = host.status === 'connected'
+
+      const setMachine = async (enabled) => {
+        setBusy('machine')
+        setError('')
+        try {
+          await call('/memory/settings', { method: 'POST', body: { machine: { connectionId: host.id, enabled } } })
+          if (enabled && path) {
+            await call('/memory/refresh', { method: 'POST', body: { connectionId: host.id, path, workspaces: workspacePaths } }).catch(() => {})
+          }
+          await load(path)
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+        setBusy('')
+      }
+
+      const refresh = async () => {
+        setBusy('refresh')
+        setError('')
+        try {
+          await call('/memory/refresh', { method: 'POST', body: { connectionId: host.id, path, workspaces: workspacePaths } })
+            .then((result) => setData(result))
+            .catch(async (failure) => {
+              setError(failure instanceof Error ? failure.message : String(failure))
+              await load(path)
+            })
+          pushInfo('记忆简报已刷新')
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+        setBusy('')
+      }
+
+      const saveNote = async (payload) => {
+        if (!editor) return
+        setBusy('note')
+        setError('')
+        try {
+          await call('/memory/note', {
+            method: 'POST',
+            body: {
+              connectionId: host.id,
+              remotePath: editor.scope === 'machine' ? '' : path,
+              scope: editor.scope,
+              id: editor.note ? editor.note.id : undefined,
+              text: payload.text,
+              kind: payload.kind,
+              tags: payload.tags,
+              pinned: payload.pinned,
+            },
+          })
+          setEditor(null)
+          await load(path)
+          pushInfo('笔记已保存')
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+        setBusy('')
+      }
+
+      const noteAction = async (action, scope, note) => {
+        setBusy('note')
+        setError('')
+        try {
+          await call('/memory/note/' + action, {
+            method: 'POST',
+            body: { connectionId: host.id, remotePath: scope === 'machine' ? '' : path, scope, id: note.id },
+          })
+          await load(path)
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+        setBusy('')
+      }
+
+      const handlers = {
+        edit: (note) => setEditor({ scope: 'workspace', note }),
+        archive: (note) => void noteAction('archive', 'workspace', note),
+        restore: (note) => void noteAction('restore', 'workspace', note),
+      }
+      const machineHandlers = {
+        edit: (note) => setEditor({ scope: 'machine', note }),
+        archive: (note) => void noteAction('archive', 'machine', note),
+        restore: (note) => void noteAction('restore', 'machine', note),
+      }
+
+      const rawBlock = (label, data) => h('details', { className: 'rd-raw' },
+        h('summary', null, label),
+        h('pre', null, JSON.stringify(data, null, 2)),
+      )
+
+      const facts = (rows) => h('div', { className: 'rd-facts' },
+        rows.map(([key, value, sub, clamp], index) => {
+          const id = key + ':' + index
+          const open = expandedFacts.has(id)
+          const toggle = () => setExpandedFacts((current) => {
+            const next = new Set(current)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+          })
+          return h('div', { className: 'rd-fact' + (sub ? ' sub' : '') + (clamp ? ' clampable' : ''), key: id },
+            h('span', { className: 'k' }, key),
+            h('span', {
+              className: 'v' + (clamp && !open ? ' clamp2' : ''),
+              title: clamp ? String(value) : undefined,
+              onClick: clamp ? toggle : undefined,
+            }, value),
+            clamp ? h('button', { className: 'rd-fact-more', onClick: toggle, title: open ? '收起' : '显示全文' }, open ? '收起' : '展开') : null,
+          )
+        }),
+      )
+
+      const machineFactRows = []
+      if (machineBrief && machineBrief.data) {
+        const d = machineBrief.data
+        if (d.os) machineFactRows.push(['系统', d.os])
+        if (d.resources) machineFactRows.push(['资源', d.resources])
+        if (Array.isArray(d.tools) && d.tools.length > 0) machineFactRows.push(['已装', d.tools.join(' · ')])
+        if (d.shell) machineFactRows.push(['Shell', d.shell])
+      }
+
+      const workspaceFactRows = []
+      if (workspaceBrief && workspaceBrief.data) {
+        const d = workspaceBrief.data
+        if (Array.isArray(d.repos) && d.repos.length > 0) {
+          const total = Number.isFinite(d.totalRepos) ? d.totalRepos : d.repos.length
+          workspaceFactRows.push(['结构', total + ' 个子仓库'])
+          for (const repo of d.repos) {
+            const parts = [repo.stack, ...(repo.commands || []), repo.role].filter(Boolean)
+            workspaceFactRows.push([repo.name, parts.length > 0 ? parts.join(' · ') : '—', true])
+          }
+          if (total > d.repos.length) {
+            workspaceFactRows.push(['…', '还有 ' + (total - d.repos.length) + ' 个子仓库未列出（上限 12 个）', true])
+          }
+        }
+        if (Array.isArray(d.entryDocs) && d.entryDocs.length > 0) {
+          workspaceFactRows.push(['入口文档', d.entryDocs.join(' · ')])
+        }
+        if (d.vcs) workspaceFactRows.push(['版本库', d.vcs])
+        if (d.git && d.git.remote) workspaceFactRows.push(['Git', d.git.remote])
+        if (d.stack) workspaceFactRows.push(['技术栈', d.stack])
+        if (Array.isArray(d.commands) && d.commands.length > 0) workspaceFactRows.push(['命令', d.commands.join(' · ')])
+        if (Array.isArray(d.children) && d.children.length > 0) {
+          const kids = d.children.filter((child) => child.vcs || child.stack)
+          if (kids.length > 0) {
+            workspaceFactRows.push(['结构', kids.length + ' 个版本库 / 组件'])
+            for (const kid of kids.slice(0, 5)) {
+              const parts = [kid.vcs ? kid.vcs.toUpperCase() + ' 工作副本' : '', kid.stack].filter(Boolean)
+              workspaceFactRows.push([kid.name, parts.join(' · '), true])
+            }
+          }
+        }
+        if (Array.isArray(d.dirs) && d.dirs.length > 0) workspaceFactRows.push(['顶层目录', d.dirs.join(' · ')])
+        if (d.readme) workspaceFactRows.push(['README', d.readme, false, true])
+      }
+
+      const machineNoteList = machineNotes.length === 0
+        ? h('div', { className: 'rd-blank' }, '还没有机器笔记。这里放整台机器通用的事实：内网镜像、权限、固定路径。')
+        : machineNotes.slice().sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1))
+            .map((note) => noteRowV3(note, 'machine', busy !== '', machineHandlers))
+
+      const workspaceNoteList = workspaceNotes.length === 0
+        ? h('div', { className: 'rd-blank' }, workspaceBrief
+            ? '这个工作区还没有笔记。简报已生成，注入里目前只有机器信息和上面的自动摘要。'
+            : '这个工作区还没有笔记，简报也还没生成。点右上角「刷新简报」先采集一次。')
+        : workspaceNotes.slice().sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1))
+            .map((note) => noteRowV3(note, 'workspace', busy !== '', handlers))
+
+      const switchButton = (on, onClick, disabled) => h('button', {
+        className: 'rd-switch' + (on ? ' on' : ''),
+        onClick,
+        disabled,
+        title: on ? '点击关闭' : '点击开启',
+      }, h('span', null))
+
+      return h('div', { className: 'rd-mem3' },
+        h('div', { className: 'rd-mem3-head' },
+          h('div', null,
+            h('div', { className: 'rd-mem3-title' }, '远程记忆'),
+            h('div', { className: 'rd-mem3-sub' }, '只影响远程工作区会话；数据只存本机，不写远端仓库。'),
+          ),
+          h('div', { className: 'rd-mem3-actions' },
+            h('button', { className: 'rd-btn sm', disabled: busy !== '', onClick: () => void refresh() },
+              h(Icon, { name: 'refresh', size: 12 }), busy === 'refresh' ? '刷新中…' : '刷新简报'),
+          ),
+        ),
+        error ? h('div', { className: 'rd-mem3-error' }, error) : null,
+        loading && !data
+          ? h('div', { className: 'rd-blank' }, '正在读取记忆…')
+          : !machineOn
+            ? h('div', { className: 'rd-mem3-onboard' },
+                h('div', { className: 'ic' }, h(Icon, { name: 'server', size: 20 })),
+                h('div', { className: 'tt' }, host.name + ' 的记忆未开启'),
+                h('div', { className: 'ts' }, '全局记忆已开启；每台机器还需要单独开启。开启后才会生成简报并注入。'),
+                h('button', { className: 'rd-btn primary', disabled: busy !== '', onClick: () => void setMachine(true) }, '开启本机记忆'),
+              )
+            : h(React.Fragment, null,
+                // ---------------------------------------------- 机器层
+                h('section', { className: 'rd-layer machine' },
+                  h('div', { className: 'rd-layer-head' },
+                    h('span', { className: 'rd-layer-icon' }, h(Icon, { name: 'server', size: 15 })),
+                    h('div', { className: 'rd-layer-title' },
+                      h('div', { className: 't' }, host.name, h('span', { className: 'rd-layer-badge' }, '机器层')),
+                      h('div', { className: 's' },
+                        connected ? h('span', { className: 'rd-live' }, '●', latency ? ' 已连接 · ' + latency : ' 已连接') : '未连接',
+                        ' · 所有工作区共享',
+                      ),
+                    ),
+                    h('div', { className: 'rd-layer-right' },
+                      h('span', { className: 'rd-layer-switchlabel' }, '本机记忆'),
+                      switchButton(machineOn, () => void setMachine(false), busy !== ''),
+                    ),
+                  ),
+                  h('div', { className: 'rd-subhead' },
+                    h('span', { className: 't' }, '机器信息'),
+                    machineBrief ? h('span', { className: 'meta' }, '自动 · ' + (ago(machineBrief.generatedAt) || '已生成')) : h('span', { className: 'meta' }, '未生成'),
+                  ),
+                  machineFactRows.length > 0
+                    ? facts(machineFactRows)
+                    : h('div', { className: 'rd-blank' }, '还没有机器简报。点右上角「刷新简报」生成。'),
+                  h('div', { className: 'rd-divider' }),
+                  h('div', { className: 'rd-subhead' },
+                    h('span', { className: 't' }, '机器笔记'),
+                    h('span', { className: 'rd-count' }, String(activeNotesOf(machineNotes).length)),
+                    h('div', { className: 'rd-subhead-right' },
+                      h('button', { className: 'rd-btn sm', disabled: busy !== '', onClick: () => setEditor({ scope: 'machine', note: null }) },
+                        h(Icon, { name: 'plus', size: 12 }), '添加机器笔记'),
+                    ),
+                  ),
+                  h('div', { className: 'rd-notes' }, machineNoteList),
+                  rawBlock('原始数据（存储内容）', machineBrief ? machineBrief.data : null),
+                ),
+                // ---------------------------------------------- 工作区层
+                h('section', { className: 'rd-layer workspace' },
+                  h('div', { className: 'rd-layer-head' },
+                    h('span', { className: 'rd-layer-icon' }, h(Icon, { name: 'folder', size: 15 })),
+                    h('div', { className: 'rd-layer-title' },
+                      h('div', { className: 't' }, '工作区层', h('span', { className: 'rd-layer-badge' }, '只对当前工作区生效')),
+                      h('div', { className: 's' }, '切换工作区会看到它自己的简报和笔记'),
+                    ),
+                    h('div', { className: 'rd-layer-right' },
+                      hostWorkspaces.length === 0
+                        ? h('span', { className: 'rd-layer-switchlabel' }, '这台机器还没有工作区')
+                        : h('div', { className: 'rd-wschips' },
+                            hostWorkspaces.map((row) => h('button', {
+                              key: row.stub || row.path,
+                              className: 'rd-wschip' + (row.path === path ? ' on' : ''),
+                              onClick: () => setPath(row.path),
+                            },
+                            row.folder || row.title,
+                            h('span', { className: 'n' }, String(counts[row.path] || 0)),
+                            )),
+                          ),
+                    ),
+                  ),
+                  path ? h('div', { className: 'rd-pathline' }, h('span', null, '路径'), h('code', null, path)) : null,
+                  !path
+                    ? h('div', { className: 'rd-blank' }, '先在概览里把远端目录添加为工作区，才能生成工作区记忆。')
+                    : h(React.Fragment, null,
+                        h('div', { className: 'rd-subhead' },
+                          h('span', { className: 't' }, '工作区信息'),
+                          workspaceBrief ? h('span', { className: 'meta' }, '自动 · ' + (ago(workspaceBrief.generatedAt) || '已生成')) : h('span', { className: 'meta' }, '未生成'),
+                        ),
+                        workspaceFactRows.length > 0
+                          ? facts(workspaceFactRows)
+                          : h('div', { className: 'rd-blank' }, '还没有生成工作区简报。点右上角「刷新简报」生成。'),
+                        h('div', { className: 'rd-divider' }),
+                        h('div', { className: 'rd-subhead' },
+                          h('span', { className: 't' }, '工作区笔记'),
+                          h('span', { className: 'rd-count' }, String(activeNotesOf(workspaceNotes).length)),
+                          h('div', { className: 'rd-subhead-right' },
+                            h('button', { className: 'rd-btn sm', disabled: busy !== '', onClick: () => setEditor({ scope: 'workspace', note: null }) },
+                              h(Icon, { name: 'plus', size: 12 }), '添加工作区笔记'),
+                          ),
+                        ),
+                        h('div', { className: 'rd-notes' }, workspaceNoteList),
+                        rawBlock('原始数据（存储内容）', workspaceBrief ? workspaceBrief.data : null),
+                      ),
+                ),
+                h('details', { className: 'rd-inject' },
+                  h('summary', null,
+                    h(Icon, { name: 'wand', size: 13 }),
+                    h('span', null, '本次会话注入'),
+                    h('span', { className: 'rd-injectmeta' }, preview.bytes + ' B / ' + preview.limit + ' B'),
+                  ),
+                  h('pre', null, preview.text || '（无内容）'),
+                ),
+              ),
+        editor
+          ? h(NoteDialog, {
+              scope: editor.scope,
+              host,
+              remotePath: path,
+              workspaceName: currentName,
+              note: editor.note,
+              busy: busy === 'note',
+              onClose: () => setEditor(null),
+              onSave: (payload) => void saveNote(payload),
+            })
+          : null,
+      )
+    }
+
+    function RemoteDeckSettings({ state }) {
+      const [section, setSection] = React.useState('memory')
+      const [settings, setSettings] = React.useState(null)
+      const [notes, setNotes] = React.useState([])
+      const [editor, setEditor] = React.useState(null)
+      const [error, setError] = React.useState('')
+      const [busy, setBusy] = React.useState('')
+
+      const load = React.useCallback(async () => {
+        try {
+          const [settingsResult, pluginResult] = await Promise.all([
+            call('/memory/settings'),
+            call('/memory/plugin'),
+          ])
+          setSettings(settingsResult.settings)
+          setNotes((pluginResult.notes || []).filter((note) => note.status === 'active'))
+          setError('')
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+      }, [])
+
+      React.useEffect(() => {
+        void load()
+      }, [load])
+
+      const save = async (patch) => {
+        setBusy('save')
+        setError('')
+        try {
+          const result = await call('/memory/settings', { method: 'POST', body: patch })
+          setSettings(result.settings)
+          await refresh()
+          pushInfo('已保存')
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+        setBusy('')
+      }
+
+      const saveBudget = async (kilobytes) => {
+        await save({ injectBytes: kilobytes * 1024 })
+      }
+
+      const saveNote = async () => {
+        if (!editor) return
+        setBusy('note')
+        setError('')
+        try {
+          await call('/memory/note', {
+            method: 'POST',
+            body: { scope: 'plugin', id: editor.id, text: editor.text, kind: editor.kind, tags: editor.tags, pinned: editor.pinned },
+          })
+          setEditor(null)
+          await load()
+          pushInfo('笔记已保存')
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+        setBusy('')
+      }
+
+      const archiveNote = async (id) => {
+        setBusy('archive')
+        try {
+          await call('/memory/note/archive', { method: 'POST', body: { scope: 'plugin', id } })
+          await load()
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+        setBusy('')
+      }
+
+      const openEditor = (note) => {
+        setEditor({
+          id: note ? note.id : '',
+          kind: note ? note.kind : 'fact',
+          text: note ? note.text : '',
+          tags: note ? note.tags.join(', ') : '',
+          pinned: note ? note.pinned : false,
+        })
+      }
+
+      const enabled = settings && settings.enabled === true
+      const budgetKb = settings ? Math.round((settings.injectBytes || 2000) / 1024) : 2
+      const switchButton = (on, onClick, disabled) => h('button', {
+        className: 'rd-set-switch' + (on ? ' on' : ''),
+        onClick,
+        disabled,
+        title: on ? '点击关闭' : '点击开启',
+      }, h('span', null))
+
+      const row = (title, description, control) => h('div', { className: 'rd-set-row' },
+        h('div', null, h('div', { className: 'tt' }, title), h('div', { className: 'td' }, description)),
+        h('div', { className: 'ctl' }, control),
+      )
+
+      const memory = h(React.Fragment, null,
+        h('div', { className: 'rd-set-head' },
+          h('div', { className: 't' }, '记忆'),
+          h('div', { className: 's' }, '全局记忆开关与所有机器共享的采集、预算和插件级笔记。'),
+        ),
+        error ? h('div', { className: 'rd-set-error' }, error) : null,
+        h('div', { className: 'rd-set-card' },
+          row('全局记忆', '关闭后所有机器都不显示记忆页、不注入、不探测；已有数据保留。', switchButton(enabled, () => void save({ enabled: !enabled }), busy !== '' && busy !== 'note')),
+          h('div', { className: 'rd-set-note' }, enabled ? '已开启。进入任一台机器的「记忆」tab，可以单独开启本机记忆。' : '默认关闭。开启后，机器页才会出现「记忆」tab。'),
+        ),
+        h('div', { className: 'rd-set-card' },
+          h('div', { className: 'rd-set-cardhead' }, '注入预算'),
+          h('div', { className: 'rd-set-desc' }, '每次请求最多注入多少环境摘要。数值越小越省 token；默认 2 KB。'),
+          h('div', { className: 'rd-set-seg' },
+            [1, 2, 3].map((kb) => h('button', {
+              key: kb,
+              className: 'rd-set-segbtn' + (budgetKb === kb ? ' on' : ''),
+              disabled: busy !== '' || !settings,
+              onClick: () => void saveBudget(kb),
+            }, kb + ' KB')),
+          ),
+        ),
+        h('div', { className: 'rd-set-card' },
+          h('div', { className: 'rd-set-cardhead' }, '自动采集'),
+          h('div', { className: 'rd-set-desc' }, enabled ? '全局开启时按以下方式采集；关闭全局后停止采集。' : '全局记忆关闭时不会采集；开启后按以下设置执行。'),
+          row('机器信息', '系统、CPU、内存总量、工具版本；每天一次。不含磁盘/负载等实时状态。', switchButton(settings ? settings.machineProbe !== false : true, () => void save({ machineProbe: !(settings && settings.machineProbe !== false) }), busy !== '' || !enabled)),
+          row('工作区信息', '子仓库、技术栈、构建命令；文件变化时重新扫描。不含分支/HEAD 等实时状态。', switchButton(settings ? settings.workspaceScan !== false : true, () => void save({ workspaceScan: !(settings && settings.workspaceScan !== false) }), busy !== '' || !enabled)),
+        ),
+        h('div', { className: 'rd-set-card' },
+          h('div', { className: 'rd-set-cardhead' }, '插件级笔记',
+            h('button', { className: 'rd-btn sm', disabled: busy !== '', onClick: () => openEditor() }, h(Icon, { name: 'plus', size: 12 }), '添加'),
+          ),
+          h('div', { className: 'rd-set-desc' }, '对所有远程会话生效；机器/工作区笔记仍在各自机器页。'),
+          notes.length === 0
+            ? h('div', { className: 'rd-set-empty' }, '还没有插件级笔记。')
+            : notes.map((note) => h('div', { className: 'rd-set-noteitem', key: note.id },
+                h('span', { className: 'rd-set-kind ' + note.kind }, NOTE_KIND_LABEL[note.kind] || note.kind),
+                h('div', { className: 'body' },
+                  h('div', { className: 'txt' }, note.text),
+                  h('div', { className: 'sub' }, note.pinned ? '已固定 · ' : '', ago(note.updatedAt) || '刚刚'),
+                ),
+                h('div', { className: 'ops' },
+                  h('button', { className: 'rd-set-icon', title: '编辑', onClick: () => openEditor(note) }, h(Icon, { name: 'edit', size: 12 })),
+                  h('button', { className: 'rd-set-icon', title: '归档', onClick: () => void archiveNote(note.id) }, h(Icon, { name: 'trash', size: 12 })),
+                ),
+              )),
+        ),
+        h('div', { className: 'rd-set-card' },
+          h('div', { className: 'rd-set-cardhead' }, '数据位置'),
+          h('div', { className: 'rd-set-path' }, '<DSH_HOME>/remote-deck/memory'),
+          h('div', { className: 'rd-set-desc' }, '只保存在本机；关闭开关或卸载插件都不会删除。'),
+        ),
+      )
+
+      const diagnostics = h(React.Fragment, null,
+        h('div', { className: 'rd-set-head' },
+          h('div', { className: 't' }, '数据与诊断'),
+          h('div', { className: 's' }, '远程开发插件的数据位置与当前版本。'),
+        ),
+        h('div', { className: 'rd-set-card' },
+          row('插件版本', 'Host 与浏览器端应一致；升级后需完全退出 DSH 再打开。', h('span', { className: 'rd-set-value' }, state && state.build ? state.build : '—')),
+          row('数据目录', '连接、工作区、转发与记忆都在这里；不会被远端仓库访问。', h('span', { className: 'rd-set-path' }, '<DSH_HOME>/remote-deck')),
+          row('记忆目录', '记忆开关、笔记、简报缓存与历史。', h('span', { className: 'rd-set-path' }, '<DSH_HOME>/remote-deck/memory')),
+        ),
+        h('div', { className: 'rd-set-card' },
+          h('div', { className: 'rd-set-cardhead' }, '后续'),
+          h('div', { className: 'rd-set-desc' }, '这里会继续承载远程开发的全局设置，例如默认连接行为、外观与诊断；左侧会随功能增加分组。'),
+        ),
+      )
+
+      return h('div', { className: 'rd-set' },
+        h('aside', { className: 'rd-set-nav' },
+          h('div', { className: 'rd-set-navtitle' }, '设置'),
+          h('button', { className: 'rd-set-navitem' + (section === 'memory' ? ' on' : ''), onClick: () => setSection('memory') }, h(Icon, { name: 'sliders', size: 13 }), '记忆'),
+          h('button', { className: 'rd-set-navitem' + (section === 'diagnostics' ? ' on' : ''), onClick: () => setSection('diagnostics') }, h(Icon, { name: 'server', size: 13 }), '数据与诊断'),
+          h('div', { className: 'rd-set-navfoot' }, '远程开发'),
+        ),
+        h('section', { className: 'rd-set-main' }, section === 'memory' ? memory : diagnostics),
+        editor
+          ? h('div', { className: 'rd-mem2-overlay', onClick: () => setEditor(null) },
+              h('div', { className: 'rd-mem2-modal', onClick: (event) => event.stopPropagation() },
+                h('div', { className: 'rd-mem2-modalhead' },
+                  h('div', null, h('div', { className: 't' }, editor.id ? '编辑插件笔记' : '添加插件笔记'), h('div', { className: 's' }, '对所有远程会话生效。')),
+                  h('button', { className: 'rd-mem2-icon', onClick: () => setEditor(null) }, h(Icon, { name: 'x', size: 14 })),
+                ),
+                h('div', { className: 'rd-mem2-modalbody' },
+                  h('div', { className: 'rd-mem2-formrow' },
+                    h('span', null, '类型'),
+                    h('select', { value: editor.kind, onChange: (event) => setEditor({ ...editor, kind: event.target.value }) },
+                      Object.entries(NOTE_KIND_LABEL).map(([id, label]) => h('option', { key: id, value: id }, label)),
+                    ),
+                  ),
+                  h('textarea', {
+                    className: 'rd-mem2-textarea',
+                    value: editor.text,
+                    maxLength: 500,
+                    placeholder: '所有远程会话都适用的事实或偏好。',
+                    onChange: (event) => setEditor({ ...editor, text: event.target.value }),
+                  }),
+                  h('div', { className: 'rd-mem2-formrow' },
+                    h('span', null, '标签'),
+                    h('input', { className: 'rd-mem2-input', value: editor.tags, placeholder: 'build, preference', onChange: (event) => setEditor({ ...editor, tags: event.target.value }) }),
+                    h('label', { className: 'rd-mem2-check' }, h('input', { type: 'checkbox', checked: editor.pinned, onChange: (event) => setEditor({ ...editor, pinned: event.target.checked }) }), '固定到简报'),
+                  ),
+                ),
+                h('div', { className: 'rd-mem2-modalfoot' },
+                  h('button', { className: 'rd-btn', onClick: () => setEditor(null), disabled: busy !== '' }, '取消'),
+                  h('button', { className: 'rd-btn primary', onClick: () => void saveNote(), disabled: busy !== '' || editor.text.trim().length === 0 }, busy === 'note' ? '保存中…' : '保存'),
+                ),
+              ),
+            )
+          : null,
+      )
+    }
+
     function Console() {
       const state = useStore((s) => s.state)
       const ready = useStore((s) => s.ready)
+      const view = useStore((s) => s.consoleView || 'console')
       const selectedId = useStore((s) => s.consoleHost)
       const busy = useStore((s) => s.busy)
       const tab = useStore((s) => s.consoleTab || 'overview')
+      const memoryEnabled = useStore((s) => Boolean(s.state && s.state.memory && s.state.memory.enabled === true))
+      const activeTab = tab === 'memory' && !memoryEnabled ? 'overview' : tab
       const [query, setQuery] = React.useState('')
       const quickPins = useStore((s) => s.quickPins || [])
       const [pinHint, setPinHint] = React.useState('')
+
+      if (view === 'settings') {
+        return h('div', { className: 'rd-console' },
+          h('div', { className: 'rd-ctop' },
+            h('button', { className: 'rd-btn ghost', onClick: () => { store.consoleView = 'console'; emit() } }, h(Icon, { name: 'arrowleft', size: 13 }), '返回'),
+            h('span', { className: 't' }, '设置'),
+            h('span', { className: 's' }, '远程开发'),
+          ),
+          h(RemoteDeckSettings, { state }),
+        )
+      }
 
       const connections = (state && state.connections) || []
       const workspaces = (state && state.workspaces) || []
@@ -2417,7 +3513,11 @@ window.__ModuleLoader__.load({
 
       if (connections.length === 0) {
         return h('div', { className: 'rd-console' },
-          h('div', { className: 'rd-ctop' }, h('span', { className: 't' }, '远程开发'), h('span', { className: 's' }, 'SSH 工作区')),
+          h('div', { className: 'rd-ctop' }, h('span', { className: 't' }, '远程开发'), h('span', { className: 's' }, 'SSH 工作区'),
+            h('div', { className: 'r' },
+              h('button', { className: 'rd-btn', onClick: () => { store.consoleView = 'settings'; emit() } }, h(Icon, { name: 'sliders', size: 13 }), '设置'),
+            ),
+          ),
           h('div', { style: { padding: 26 } },
             h('div', { className: 'rd-empty' },
               h('div', { style: { fontSize: 13, color: 'inherit', marginBottom: 4 } }, '还没有连接任何机器'),
@@ -2509,6 +3609,8 @@ window.__ModuleLoader__.load({
               h(Icon, { name: 'search', size: 13 }),
               h('input', { value: query, placeholder: '搜索机器、工作区…', onChange: (event) => setQuery(event.target.value) }),
             ),
+            h('button', { className: 'rd-btn', onClick: () => { store.consoleView = 'settings'; emit() } },
+              h(Icon, { name: 'sliders', size: 13 }), '设置'),
             h('button', { className: 'rd-btn primary', onClick: () => openHostDialog() },
               h(Icon, { name: 'plus', size: 13 }), '添加机器'),
           ),
@@ -2526,19 +3628,19 @@ window.__ModuleLoader__.load({
           ),
           h('section', { className: 'rd-cpane' },
             h('div', { className: 'rd-tabs' },
-              [['overview', '概览'], ['terminal', '终端'], ['files', '文件'], ['ports', '端口转发']].map(([id, label]) => h('button', {
+              [['overview', '概览'], ...(memoryEnabled ? [['memory', '记忆']] : []), ['terminal', '终端'], ['files', '文件'], ['ports', '端口转发']].map(([id, label]) => h('button', {
                 key: id,
-                className: 'rd-tab' + (tab === id ? ' on' : ''),
+                className: 'rd-tab' + (activeTab === id ? ' on' : ''),
                 onClick: () => { store.consoleTab = id; emit() },
               }, label)),
             ),
-            h('div', { className: 'rd-status' + (hostIssue ? ' bad' : '') },
+            activeTab === 'memory' ? null : h('div', { className: 'rd-status' + (hostIssue ? ' bad' : '') },
               h(Dot, { state: hostIssue ? 'error' : host.status }),
               h('span', { className: 't', title: hostIssue ? (hostIssue.title + ' — ' + hostIssue.hint) : '' },
                 hostIssue ? hostIssue.title : (host.status === 'connected' ? '连接正常' : '未连接')),
             ),
-            tab === 'overview' ? null : (tab === 'terminal' ? h(TerminalPanel, { host }) : tab === 'files' ? h(FilePanel, { host }) : h(PortsPanel, { host })),
-            h('div', { className: 'rd-overview', style: { display: tab === 'overview' ? 'contents' : 'none' } },
+            activeTab === 'overview' ? null : (activeTab === 'terminal' ? h(TerminalPanel, { host }) : activeTab === 'files' ? h(FilePanel, { host }) : activeTab === 'memory' ? h(MemoryPanel, { host, hostWorkspaces }) : h(PortsPanel, { host })),
+            h('div', { className: 'rd-overview', style: { display: activeTab === 'overview' ? 'contents' : 'none' } },
             h('div', { className: 'rd-chead' },
               h('span', { className: 'rd-cavatar', style: { background: color } }, h(Icon, { name: 'server', size: 24 })),
               h('div', null,
