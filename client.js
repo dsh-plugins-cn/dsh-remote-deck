@@ -533,9 +533,6 @@ window.__ModuleLoader__.load({
       .rd-body { overflow:auto;padding:0 14px 4px;display:flex;flex-direction:column;gap:8px }
 
       .rd-hosts { display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px }
-      .rd-legend { display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:7px 2px 0;font-size:10px;color:var(--dsw-alias-label-secondary,#8f959e) }
-      .rd-legend .lbl { font-weight:600;margin-right:1px }
-      .rd-legend .g { display:inline-flex;align-items:center;gap:3px }
       .rd-host { border:1px solid var(--dsw-alias-border-l1,#e8e8ec);border-radius:9px;padding:8px 9px;display:flex;flex-direction:column;gap:6px;background:var(--dsw-alias-bg-layer-1,#fff);cursor:pointer;position:relative }
       .rd-host[data-active="true"] { border-color:#a9c9ec;background:rgba(47,125,221,.06);box-shadow:0 0 0 2px rgba(47,125,221,.09) }
       .rd-host .r1 { display:flex;align-items:center;gap:6px;min-width:0 }
@@ -601,9 +598,6 @@ window.__ModuleLoader__.load({
 
       .rd-badge { width:15px;height:15px;border-radius:4px;display:grid;place-items:center;color:#fff;flex:none }
       .rd-badge svg { width:9px;height:9px;stroke-width:2.4 }
-      .rd-badge[data-state="disconnected"] { opacity:.58;box-shadow:0 0 0 1.5px var(--dsw-specific-sidebar-fill),0 0 0 2.5px var(--dsw-alias-label-tertiary) }
-      .rd-badge[data-state="connecting"] { box-shadow:0 0 0 1.5px var(--dsw-specific-sidebar-fill),0 0 0 2.5px var(--dsw-alias-state-warn-primary) }
-      .rd-badge[data-state="error"] { box-shadow:0 0 0 1.5px var(--dsw-specific-sidebar-fill),0 0 0 2.5px var(--dsw-alias-state-error-primary) }
       .rd-hover { display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
 
       /* ---- console ---- */
@@ -1482,16 +1476,6 @@ window.__ModuleLoader__.load({
               : h('div', { className: 'rd-host add', onClick: () => openHostDialog() },
                 h(Icon, { name: 'plus', size: 13 }), '添加机器'),
           ),
-          workspaces.length > 0
-            ? h('div', { className: 'rd-legend', title: '侧栏工作区行右下角的状态点' },
-              h('span', { className: 'lbl' }, '工作区点'),
-              h('span', { className: 'g' }, h(Dot, { state: 'connected' }), '已连接'),
-              h('span', { className: 'g' }, h(Dot, { state: 'connecting' }), '连接中'),
-              h('span', { className: 'g' }, h(Dot, { state: 'disconnected' }), '未连接'),
-              h('span', { className: 'g' }, h(Dot, { state: 'error' }), '失败'),
-            )
-            : null,
-
           h('div', { className: 'rd-sect' }, '快捷操作'),
           h('div', { className: 'rd-quick' },
             h('button', { className: 'rd-qa', onClick: () => openWorkspaceDialog(first ? first.id : undefined) },
@@ -3929,19 +3913,6 @@ window.__ModuleLoader__.load({
       return useStore(() => remoteForSession(sessionId))
     }
 
-    function SessionBadge({ sessionId }) {
-      const remote = useRemote(sessionId)
-      if (!remote) return null
-      const host = (store.state && store.state.connections || []).find((row) => row.id === remote.connectionId)
-      const status = host ? host.status : 'disconnected'
-      return h('span', {
-        className: 'rd-badge',
-        'data-state': status,
-        style: { background: colorOf(remote.color) },
-        title: remote.host + ' · ' + remote.path + ' · ' + connectionStatusLabel(status),
-      }, h(Icon, { name: 'term', size: 9 }))
-    }
-
     function SessionHoverExtra({ sessionId }) {
       const remote = useRemote(sessionId)
       if (!remote) return null
@@ -4309,9 +4280,6 @@ window.__ModuleLoader__.load({
       const offs = []
       offs.push(ctx.slots.inject('sidebar.footer.action', () =>
         ctx.slots.register({ name: 'sidebar.footer.action', id: 'remote-deck', order: 20 }, Chip),
-      ))
-      offs.push(ctx.slots.inject('sidebar.session.row.leading', () =>
-        ctx.slots.register({ name: 'sidebar.session.row.leading', id: 'remote-deck-mark', order: 5 }, SessionBadge),
       ))
       offs.push(ctx.slots.inject('sidebar.session.row.hover', () =>
         ctx.slots.register({ name: 'sidebar.session.row.hover', id: 'remote-deck-hover', order: 5 }, SessionHoverExtra),

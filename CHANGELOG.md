@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.6.3] - 2026-11-16
+
+### Removed
+
+- Removed the quick-panel "workspace dot" legend. Host cards already label each
+  state, and the legend only added visual noise.
+- Removed the 15px remote-session badge from the sidebar Session row leading cell.
+  DSH reserves that 16px cell for its own status dot; the larger badge made remote
+  rows look left-aligned with the workspace folder even though the title text was
+  already at the same x as a local session. Session identity remains in the
+  workspace title, the conversation header pill, the hover card, the quick panel
+  and the console.
+
+### Verified
+
+- `npm run check`; `node --test` (52/52); pack dry.
+- deckcheck 1.6.2 → 1.6.3 upgrade and real-page render; 3 remote workspace dots,
+  local workspace unchanged; no `.rd-badge` in sidebar session rows; fast quick-panel
+  open/close.
+
 ## [1.6.2] - 2026-11-16
 
 ### Changed
