@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "远程工作台",
-    "description": "为 DeepSeek Harness 提供 SSH 工作区：连接多台机器、浏览远端目录，并让会话在远端文件系统、命令、搜索、终端与端口转发上运行。"
+    "description": "连接多台 SSH 机器，把远端目录注册为普通 DSH 工作区；在会话中使用远端文件系统、bash、ripgrep、终端与端口转发。入口：左下角 SSH 胶囊 → 快速面板 / 控制台。",
+    "detail": "DETAIL.zh.md"
   }
 }

@@ -73,7 +73,8 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -Profile desktop
 ```
 
 Restart DSH (or press `Ctrl+R`) after installing; the SSH chip appears at the bottom of the
-sidebar and **远程开发** appears in the sidebar navigation.
+sidebar. There is no separate navigation entry: open the quick panel from the chip and choose
+**控制台 / Console** when you need the full console.
 
 The plugin has **no npm dependencies**: `ssh2` and its small dependency tree are vendored under
 `vendor/node_modules`, and the terminal assets under `vendor/xterm`. Installation therefore never

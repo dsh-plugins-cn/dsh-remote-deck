@@ -76,8 +76,10 @@
 
 ## 6. 扩展指引
 
-- **客户端插槽**：`sidebar.footer.action`（胶囊）、`sidebar.panellist` + `main`（控制台）、
-  `sidebar.session.row.leading`、`sidebar.session.row.hover`、`conversation.session.header.utilities`。
+- **客户端插槽**：`sidebar.footer.action`（胶囊）、`main`（控制台，由胶囊/快速面板进入）、
+  `sidebar.session.row.hover`、`conversation.session.header.utilities`。
+  侧栏不再注册 `sidebar.panellist`，因此没有独立导航入口；控制台通过
+  `ctx.layout.selectPanel('remote-deck')` 打开。
 - **Host 侧新增能力**：在 `lib/` 下加模块（如 terminal.js、forwards.js），在 `index.js` 组装，
   在 `lib/api.js` 加回环路由；客户端通过 `call()` 访问。
 - **数据模型**：连接在 `connections.json`（含颜色/自动连接），工作区是带 `.dsh-remote.json`

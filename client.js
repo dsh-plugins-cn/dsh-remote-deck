@@ -15,6 +15,7 @@ window.__ModuleLoader__.load({
   factory(require) {
     const React = require('react')
     const h = React.createElement
+    const PRODUCT_NAME = '远程工作台'
     const useSyncExternalStore =
       React.useSyncExternalStore ||
       ((subscribe, getSnapshot) => {
@@ -333,8 +334,8 @@ window.__ModuleLoader__.load({
 
     /** One display sentence for the SSH chip's accessible name. */
     function sshStatusSummary(connections) {
-      if (connections.length === 0) return '远程开发：还没有 SSH 连接'
-      return '远程开发：' + connections.map((row) => row.name + ' ' + connectionStatusLabel(row.status)).join('，')
+      if (connections.length === 0) return PRODUCT_NAME + '：还没有 SSH 连接'
+      return PRODUCT_NAME + '：' + connections.map((row) => row.name + ' ' + connectionStatusLabel(row.status)).join('，')
     }
 
     function cssAttributeValue(value) {
@@ -657,7 +658,6 @@ window.__ModuleLoader__.load({
       .rd-sess .m2 { margin-left:auto;font-size:10.5px;color:var(--dsw-alias-label-secondary,#8f959e) }
       .rd-empty { border:1px dashed rgba(15,23,42,.18);border-radius:12px;padding:28px;text-align:center;color:var(--dsw-alias-label-secondary,#8f959e);font-size:12px;line-height:1.7 }
       .rd-empty .rd-btn { margin-top:12px }
-      .rd-pico { display:inline-flex;align-items:center;justify-content:center;flex:none;width:16px;height:16px;color:inherit }
 
       /* ---- remote files ---- */
       .rd-files { padding: 12px 0 18px }
@@ -1412,7 +1412,7 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'rd-panel', ref: panelRef },
         h('div', { className: 'rd-head' },
           h('div', null,
-            h('div', { className: 't' }, '远程开发'),
+            h('div', { className: 't' }, PRODUCT_NAME),
             h('div', { className: 's' }, ready
               ? connected.length + ' 台已连接 · ' + workspaces.length + ' 个工作区'
               : '正在加载 host…'),
@@ -2149,15 +2149,6 @@ window.__ModuleLoader__.load({
       }
       out.sort((a, b) => (b.summary.updatedAt || 0) - (a.summary.updatedAt || 0))
       return out
-    }
-
-    function ConsoleIcon({ size = 16, active }) {
-      return h('span', {
-        className: 'rd-pico',
-        'data-active': String(active === true),
-        style: { width: size + 'px', height: size + 'px' },
-        title: 'Remote Deck',
-      }, h(Icon, { name: 'server', size }))
     }
 
     // ---------------------------------------------------------------- terminal + ports
@@ -3551,7 +3542,7 @@ window.__ModuleLoader__.load({
       const diagnostics = h(React.Fragment, null,
         h('div', { className: 'rd-set-head' },
           h('div', { className: 't' }, '数据与诊断'),
-          h('div', { className: 's' }, '远程开发插件的数据位置与当前版本。'),
+          h('div', { className: 's' }, PRODUCT_NAME + '插件的数据位置与当前版本。'),
         ),
         h('div', { className: 'rd-set-card' },
           row('插件版本', 'Host 与浏览器端应一致；升级后需完全退出 DSH 再打开。', h('span', { className: 'rd-set-value' }, state && state.build ? state.build : '—')),
@@ -3560,7 +3551,7 @@ window.__ModuleLoader__.load({
         ),
         h('div', { className: 'rd-set-card' },
           h('div', { className: 'rd-set-cardhead' }, '后续'),
-          h('div', { className: 'rd-set-desc' }, '这里会继续承载远程开发的全局设置，例如默认连接行为、外观与诊断；左侧会随功能增加分组。'),
+          h('div', { className: 'rd-set-desc' }, '这里会继续承载' + PRODUCT_NAME + '的全局设置，例如默认连接行为、外观与诊断；左侧会随功能增加分组。'),
         ),
       )
 
@@ -3569,7 +3560,7 @@ window.__ModuleLoader__.load({
           h('div', { className: 'rd-set-navtitle' }, '设置'),
           h('button', { className: 'rd-set-navitem' + (section === 'memory' ? ' on' : ''), onClick: () => setSection('memory') }, h(Icon, { name: 'sliders', size: 13 }), '记忆'),
           h('button', { className: 'rd-set-navitem' + (section === 'diagnostics' ? ' on' : ''), onClick: () => setSection('diagnostics') }, h(Icon, { name: 'server', size: 13 }), '数据与诊断'),
-          h('div', { className: 'rd-set-navfoot' }, '远程开发'),
+          h('div', { className: 'rd-set-navfoot' }, PRODUCT_NAME),
         ),
         h('section', { className: 'rd-set-main' }, section === 'memory' ? memory : diagnostics),
         editor
@@ -3627,7 +3618,7 @@ window.__ModuleLoader__.load({
           h('div', { className: 'rd-ctop' },
             h('button', { className: 'rd-btn ghost', onClick: () => { store.consoleView = 'console'; emit() } }, h(Icon, { name: 'arrowleft', size: 13 }), '返回'),
             h('span', { className: 't' }, '设置'),
-            h('span', { className: 's' }, '远程开发'),
+            h('span', { className: 's' }, PRODUCT_NAME),
           ),
           h(RemoteDeckSettings, { state }),
         )
@@ -3641,14 +3632,20 @@ window.__ModuleLoader__.load({
 
       if (!ready) {
         return h('div', { className: 'rd-console' },
-          h('div', { className: 'rd-ctop' }, h('span', { className: 't' }, '远程开发')),
+          h('div', { className: 'rd-ctop' },
+            h('button', { className: 'rd-btn ghost', onClick: returnToConversation, title: '返回对话' }, h(Icon, { name: 'arrowleft', size: 13 }), '返回对话'),
+            h('span', { className: 't' }, PRODUCT_NAME),
+          ),
           h('div', { style: { padding: 26 } }, h('div', { className: 'rd-empty' }, '正在加载远程连接…')),
         )
       }
 
       if (connections.length === 0) {
         return h('div', { className: 'rd-console' },
-          h('div', { className: 'rd-ctop' }, h('span', { className: 't' }, '远程开发'), h('span', { className: 's' }, 'SSH 工作区'),
+          h('div', { className: 'rd-ctop' },
+            h('button', { className: 'rd-btn ghost', onClick: returnToConversation, title: '返回对话' }, h(Icon, { name: 'arrowleft', size: 13 }), '返回对话'),
+            h('span', { className: 't' }, PRODUCT_NAME),
+            h('span', { className: 's' }, 'SSH 工作区'),
             h('div', { className: 'r' },
               h('button', { className: 'rd-btn', onClick: () => { store.consoleView = 'settings'; emit() } }, h(Icon, { name: 'sliders', size: 13 }), '设置'),
             ),
@@ -3737,7 +3734,8 @@ window.__ModuleLoader__.load({
 
       return h('div', { className: 'rd-console' },
         h('div', { className: 'rd-ctop' },
-          h('span', { className: 't' }, '远程开发'),
+          h('button', { className: 'rd-btn ghost', onClick: returnToConversation, title: '返回对话' }, h(Icon, { name: 'arrowleft', size: 13 }), '返回对话'),
+          h('span', { className: 't' }, PRODUCT_NAME),
           h('span', { className: 's' }, connected.length + ' 台在线 · ' + workspaces.length + ' 个工作区'),
           h('div', { className: 'r' },
             h('label', { className: 'rd-csearch' },
@@ -3902,6 +3900,15 @@ window.__ModuleLoader__.load({
       try {
         const layout = ctxRef ? ctxRef.get('layout') : undefined
         if (layout) layout.selectPanel('remote-deck')
+      } catch {
+        /* layout is optional */
+      }
+    }
+
+    function returnToConversation() {
+      try {
+        const layout = ctxRef ? ctxRef.get('layout') : undefined
+        if (layout) layout.selectPanel(null)
       } catch {
         /* layout is optional */
       }
@@ -4289,9 +4296,6 @@ window.__ModuleLoader__.load({
       ))
       offs.push(ctx.slots.inject('conversation.session.header.utilities', () =>
         ctx.slots.register({ name: 'conversation.session.header.utilities', id: 'remote-deck-pill', order: -20 }, HeaderPill),
-      ))
-      offs.push(ctx.slots.inject('sidebar.panellist', () =>
-        ctx.slots.register({ name: 'sidebar.panellist', id: 'remote-deck', order: 5, label: '远程开发' }, ConsoleIcon),
       ))
       offs.push(ctx.slots.inject('deliverables.file.actions', () =>
         ctx.slots.register({ name: 'deliverables.file.actions', id: 'remote-deck-download', order: 20 }, DeliverableDownloadAction),

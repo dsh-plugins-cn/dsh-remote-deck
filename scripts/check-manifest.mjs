@@ -65,7 +65,24 @@ if (existsSync(join(root, 'vendor/xterm/xterm.js')) && statSync(join(root, 'vend
 }
 
 for (const locale of ['en', 'zh']) {
-  if (!existsSync(join(root, 'locale', `${locale}.json`))) problems.push(`missing locale/${locale}.json`)
+  const file = join(root, 'locale', `${locale}.json`)
+  if (!existsSync(file)) {
+    problems.push(`missing locale/${locale}.json`)
+    continue
+  }
+  let doc = null
+  try {
+    doc = JSON.parse(readFileSync(file, 'utf8'))
+  } catch {
+    problems.push(`locale/${locale}.json is not valid JSON`)
+    continue
+  }
+  const detail = doc && doc.meta && doc.meta.detail
+  if (typeof detail === 'string' && detail.length > 0) {
+    if (!/\.md$/i.test(detail)) problems.push(`locale/${locale}.json detail must be a .md file`)
+    if (!existsSync(join(root, detail))) problems.push(`missing detail document: ${detail}`)
+    if (!pkg.files.includes(detail)) problems.push(`package.json files is missing detail document: ${detail}`)
+  }
 }
 
 if (problems.length > 0) {

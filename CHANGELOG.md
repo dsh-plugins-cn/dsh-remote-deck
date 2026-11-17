@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.6.4] - 2026-11-16
+
+### Changed
+
+- Removed the separate **远程开发** sidebar navigation entry. The bottom SSH chip is now the
+  single entry: quick panel → console. The console header gains a **返回对话** button so the
+  panel is not a dead end.
+- Unified the user-facing product name to **远程工作台** across the quick panel, console,
+  settings and SSH chip accessibility text.
+- The Chinese plugin detail is now a dedicated `DETAIL.zh.md` instead of the English README
+  fallback; the Chinese `meta.description` now states the entry point and capabilities.
+  `DETAIL.zh.md` is included in the package and checked by `check-manifest`.
+
+### Verified
+
+- `npm run check`; `node --test` (52/52); pack dry.
+- deckcheck 1.6.3 → 1.6.4 upgrade and real-page checks: chip opens quick panel, console
+  opens from the panel, 返回对话 returns to the conversation, no sidebar navigation row;
+  workspace status dots remain; plugin detail Chinese document/locale present.
+
 ## [1.6.3] - 2026-11-16
 
 ### Removed

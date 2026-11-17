@@ -68,7 +68,8 @@ cd dsh-remote-deck
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -Profile desktop
 ```
 
-装完重启 DSH（或窗口里按 `Ctrl+R`），侧栏底部出现 **SSH** 胶囊，导航里出现 **远程开发**。
+装完重启 DSH（或窗口里按 `Ctrl+R`），侧栏底部出现 **SSH** 胶囊；侧栏不再单独占用导航入口，
+需要控制台时从胶囊打开快速面板，再点 **控制台**。
 
 插件**没有任何 npm 依赖**：`ssh2` 及其依赖内置在 `vendor/node_modules`，终端资源在
 `vendor/xterm`。安装过程不会执行任何构建脚本。
