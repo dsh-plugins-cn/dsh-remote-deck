@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.6.6] - 2026-11-19
+
+### Changed
+
+- Terminal download rows now auto-dismiss: errors after 10s, cancellation after 4s,
+  success/requested after 6s. The progress panel is for active transfers; completed
+  and failed results remain available in Settings → 下载 history instead of sitting
+  over the composer indefinitely.
+
 ## [1.6.5] - 2026-11-19
 
 ### Added

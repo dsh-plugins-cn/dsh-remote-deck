@@ -498,6 +498,13 @@ window.__ModuleLoader__.load({
         }
       }
       recordDownload(job)
+      // The panel is a progress surface, not a permanent notification tray.
+      // Keep the terminal state briefly, then let the history in Settings own it.
+      const dismissDelay = state === 'error' ? 10000 : state === 'cancelled' ? 4000 : 6000
+      job.dismissTimer = setTimeout(() => {
+        job.dismissTimer = null
+        closeDownloadJob(job)
+      }, dismissDelay)
       notifyDownloads()
     }
 
@@ -528,6 +535,7 @@ window.__ModuleLoader__.load({
         abort: null,
         writable: null,
         transferId: null,
+        dismissTimer: null,
       }
       downloadJobs.set(job.id, job)
       trimDownloadJobs()
@@ -713,6 +721,10 @@ window.__ModuleLoader__.load({
 
     function closeDownloadJob(job) {
       if (!job) return
+      if (job.dismissTimer !== null) {
+        clearTimeout(job.dismissTimer)
+        job.dismissTimer = null
+      }
       downloadJobs.delete(job.id)
       notifyDownloads()
     }
@@ -720,7 +732,13 @@ window.__ModuleLoader__.load({
     function trimDownloadJobs() {
       const rows = [...downloadJobs.values()].sort((a, b) => b.startedAt - a.startedAt)
       for (let index = 6; index < rows.length; index += 1) {
-        if (rows[index].finished) downloadJobs.delete(rows[index].id)
+        if (rows[index].finished) {
+          if (rows[index].dismissTimer !== null) {
+            clearTimeout(rows[index].dismissTimer)
+            rows[index].dismissTimer = null
+          }
+          downloadJobs.delete(rows[index].id)
+        }
       }
     }
 

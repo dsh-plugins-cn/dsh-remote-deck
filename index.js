@@ -34,7 +34,7 @@ function isInsidePath(child, root) {
   return rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel)
 }
 
-const BUILD = '1.6.5'
+const BUILD = '1.6.6'
 const diagnostics = { pid: process.pid, ssh2: 'pending', ssh2Error: '', checkedAt: 0 }
 void ssh2SelfTest().then((result) => {
   diagnostics.ssh2 = result.ok ? 'ok' : 'failed'
