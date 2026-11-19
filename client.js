@@ -256,6 +256,8 @@ window.__ModuleLoader__.load({
     let downloadJobSeq = 0
     let downloadPanel = null
     let downloadPanelResizeBound = false
+    let downloadBlurHandler = null
+    let downloadFocusHandler = null
     let fixedDirectoryHandle = null
     let fixedDirectoryLoaded = false
     let fixedDirectoryLoading = null
@@ -313,6 +315,29 @@ window.__ModuleLoader__.load({
       }
       renderDownloadPanel()
     }
+
+    function bindDownloadWindowFocus() {
+      if (typeof window === 'undefined' || downloadBlurHandler !== null) return
+      // Native Save-As can stream into Chromium's temporary download while its
+      // dialog is still open. Suppress the capsule while the app is unfocused;
+      // the focus listener restores it only after the dialog closes.
+      downloadBlurHandler = () => {
+        for (const job of downloadJobs.values()) {
+          if (!job.finished) job.suppressed = true
+        }
+        notifyDownloads()
+      }
+      downloadFocusHandler = () => {
+        for (const job of downloadJobs.values()) {
+          if (!job.finished) job.suppressed = false
+        }
+        notifyDownloads()
+      }
+      window.addEventListener('blur', downloadBlurHandler)
+      window.addEventListener('focus', downloadFocusHandler)
+    }
+
+    bindDownloadWindowFocus()
 
     function formatDownloadBytes(value) {
       const bytes = Math.max(0, Number(value) || 0)
@@ -490,6 +515,7 @@ window.__ModuleLoader__.load({
       job.finished = true
       job.state = state
       job.endedAt = Date.now()
+      job.suppressed = false
       Object.assign(job, extra)
       if (job.abort !== null) {
         try {
@@ -527,6 +553,7 @@ window.__ModuleLoader__.load({
         source,
         state: 'choosing',
         visible: false,
+        suppressed: false,
         loaded: 0,
         total: 0,
         speed: 0,
@@ -779,7 +806,7 @@ window.__ModuleLoader__.load({
     function renderDownloadPanel() {
       if (typeof document === 'undefined') return
       const rows = [...downloadJobs.values()]
-        .filter((job) => job.visible === true)
+        .filter((job) => job.visible === true && job.suppressed !== true)
         .sort((a, b) => a.startedAt - b.startedAt)
       if (rows.length === 0) {
         if (downloadPanel !== null) downloadPanel.remove()
@@ -791,6 +818,7 @@ window.__ModuleLoader__.load({
       // Follow the composer: place the capsule just above the input card, not
       // at a hard-coded offset that can cover it at short window heights.
       let bottom = 118
+      let right = 18
       try {
         // Prefer the largest visible textbox near the bottom. Hidden inputs in
         // other panels must not push the capsule off-screen.
@@ -800,11 +828,14 @@ window.__ModuleLoader__.load({
           .sort((a, b) => (b.width * b.height) - (a.width * a.height))
         if (candidates.length > 0) {
           bottom = Math.max(16, Math.min(window.innerHeight - 60, Math.round(window.innerHeight - candidates[0].top + 8)))
+          // Align to the composer's right edge, not the viewport's.
+          right = Math.max(12, Math.round(window.innerWidth - candidates[0].right + 12))
         }
       } catch {
         /* use the fallback */
       }
       panel.style.bottom = bottom + 'px'
+      panel.style.right = right + 'px'
       panel.textContent = ''
       for (const job of rows) {
         const active = job.state === 'downloading'
@@ -5059,6 +5090,10 @@ window.__ModuleLoader__.load({
         if (transferPanel) transferPanel.remove()
         const downloadToast = document.getElementById('rd-download-toast')
         if (downloadToast) downloadToast.remove()
+        if (downloadBlurHandler !== null) window.removeEventListener('blur', downloadBlurHandler)
+        if (downloadFocusHandler !== null) window.removeEventListener('focus', downloadFocusHandler)
+        downloadBlurHandler = null
+        downloadFocusHandler = null
         workspaceStatusCss = ''
       }, 'remote-deck: styles')
     }

@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.6.9] - 2026-11-19
+
+### Fixed
+
+- Hide the download capsule while the app is unfocused. Native Save-As can stream
+  into Chromium's temporary download before the user confirms the dialog; that
+  temporary stream no longer appears as a misleading 100% progress row. The capsule
+  returns on focus after the dialog closes.
+- Right-align the capsule to the composer card instead of the viewport edge, so it
+  sits above the input rather than outside it.
+
 ## [1.6.8] - 2026-11-19
 
 ### Fixed
