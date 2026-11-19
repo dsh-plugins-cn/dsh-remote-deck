@@ -244,6 +244,611 @@ window.__ModuleLoader__.load({
       }
     }
 
+    // ---------------------------------------------------------------- downloads
+    const DOWNLOAD_PREFS_KEY = 'dsh-remote-deck:download-prefs'
+    const DOWNLOAD_HISTORY_KEY = 'dsh-remote-deck:download-history'
+    const DOWNLOAD_DB_NAME = 'dsh-remote-deck-downloads'
+    const DOWNLOAD_DB_STORE = 'handles'
+    const DOWNLOAD_DIRECTORY_KEY = 'fixed-directory'
+    const MAX_DOWNLOAD_HISTORY = 20
+    const downloadJobs = new Map()
+    const downloadSubscribers = new Set()
+    let downloadJobSeq = 0
+    let downloadPanel = null
+    let fixedDirectoryHandle = null
+    let fixedDirectoryLoaded = false
+    let fixedDirectoryLoading = null
+    let downloadPrefs = readDownloadPrefs()
+    let downloadHistory = readDownloadHistory()
+
+    function readDownloadPrefs() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(DOWNLOAD_PREFS_KEY) || 'null')
+        if (parsed && parsed.mode === 'fixed') return { mode: 'fixed' }
+      } catch {
+        /* ignore unavailable storage */
+      }
+      return { mode: 'ask' }
+    }
+
+    function writeDownloadPrefs() {
+      try {
+        localStorage.setItem(DOWNLOAD_PREFS_KEY, JSON.stringify(downloadPrefs))
+      } catch {
+        /* ignore unavailable storage */
+      }
+    }
+
+    function readDownloadHistory() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(DOWNLOAD_HISTORY_KEY) || 'null')
+        if (Array.isArray(parsed)) return parsed.filter((row) => row && typeof row.name === 'string').slice(0, MAX_DOWNLOAD_HISTORY)
+      } catch {
+        /* ignore unavailable storage */
+      }
+      return []
+    }
+
+    function writeDownloadHistory() {
+      try {
+        localStorage.setItem(DOWNLOAD_HISTORY_KEY, JSON.stringify(downloadHistory.slice(0, MAX_DOWNLOAD_HISTORY)))
+      } catch {
+        /* ignore unavailable storage */
+      }
+    }
+
+    function subscribeDownloads(listener) {
+      downloadSubscribers.add(listener)
+      return () => downloadSubscribers.delete(listener)
+    }
+
+    function notifyDownloads() {
+      for (const listener of downloadSubscribers) {
+        try {
+          listener()
+        } catch {
+          /* a settings surface may have unmounted */
+        }
+      }
+      renderDownloadPanel()
+    }
+
+    function formatDownloadBytes(value) {
+      const bytes = Math.max(0, Number(value) || 0)
+      if (bytes < 1024) return bytes + ' B'
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+      if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+      return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
+    }
+
+    function formatDownloadDuration(seconds) {
+      if (!Number.isFinite(seconds) || seconds < 0) return ''
+      if (seconds < 60) return Math.ceil(seconds) + 's'
+      const minutes = Math.floor(seconds / 60)
+      const rest = Math.floor(seconds % 60)
+      return minutes + 'm ' + rest + 's'
+    }
+
+    function canUseFileSystemAccess() {
+      return typeof window !== 'undefined' &&
+        window.isSecureContext === true &&
+        typeof window.showSaveFilePicker === 'function'
+    }
+
+    function openDownloadDb() {
+      return new Promise((resolvePromise, rejectPromise) => {
+        if (typeof indexedDB === 'undefined') {
+          rejectPromise(new Error('当前环境不支持保存目录句柄'))
+          return
+        }
+        const request = indexedDB.open(DOWNLOAD_DB_NAME, 1)
+        request.onupgradeneeded = () => {
+          const db = request.result
+          if (!db.objectStoreNames.contains(DOWNLOAD_DB_STORE)) db.createObjectStore(DOWNLOAD_DB_STORE)
+        }
+        request.onsuccess = () => resolvePromise(request.result)
+        request.onerror = () => rejectPromise(request.error || new Error('无法打开下载目录存储'))
+      })
+    }
+
+    async function idbGetDownloadHandle() {
+      const db = await openDownloadDb()
+      return await new Promise((resolvePromise, rejectPromise) => {
+        const tx = db.transaction(DOWNLOAD_DB_STORE, 'readonly')
+        const request = tx.objectStore(DOWNLOAD_DB_STORE).get(DOWNLOAD_DIRECTORY_KEY)
+        request.onsuccess = () => resolvePromise(request.result || null)
+        request.onerror = () => rejectPromise(request.error || new Error('无法读取下载目录'))
+      })
+    }
+
+    async function idbSetDownloadHandle(handle) {
+      const db = await openDownloadDb()
+      await new Promise((resolvePromise, rejectPromise) => {
+        const tx = db.transaction(DOWNLOAD_DB_STORE, 'readwrite')
+        const request = handle === null
+          ? tx.objectStore(DOWNLOAD_DB_STORE).delete(DOWNLOAD_DIRECTORY_KEY)
+          : tx.objectStore(DOWNLOAD_DB_STORE).put(handle, DOWNLOAD_DIRECTORY_KEY)
+        request.onsuccess = () => resolvePromise()
+        request.onerror = () => rejectPromise(request.error || new Error('无法保存下载目录'))
+      })
+    }
+
+    async function ensureFixedDirectory() {
+      if (fixedDirectoryLoaded) return fixedDirectoryHandle
+      if (fixedDirectoryLoading !== null) return await fixedDirectoryLoading
+      fixedDirectoryLoading = (async () => {
+        try {
+          fixedDirectoryHandle = await idbGetDownloadHandle()
+        } catch {
+          fixedDirectoryHandle = null
+        }
+        fixedDirectoryLoaded = true
+        fixedDirectoryLoading = null
+        notifyDownloads()
+        return fixedDirectoryHandle
+      })()
+      return await fixedDirectoryLoading
+    }
+
+    async function chooseFixedDirectory() {
+      if (typeof window === 'undefined' || typeof window.showDirectoryPicker !== 'function') {
+        throw new Error('当前环境不支持选择下载目录')
+      }
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite' })
+      await idbSetDownloadHandle(handle)
+      fixedDirectoryHandle = handle
+      fixedDirectoryLoaded = true
+      downloadPrefs = { mode: 'fixed' }
+      writeDownloadPrefs()
+      notifyDownloads()
+      return handle
+    }
+
+    async function clearFixedDirectory() {
+      try {
+        await idbSetDownloadHandle(null)
+      } catch {
+        /* keep the preference clear even when IndexedDB is unavailable */
+      }
+      fixedDirectoryHandle = null
+      fixedDirectoryLoaded = true
+      downloadPrefs = { mode: 'ask' }
+      writeDownloadPrefs()
+      notifyDownloads()
+    }
+
+    async function ensureHandlePermission(handle, mode = 'readwrite') {
+      if (typeof handle.queryPermission !== 'function' || typeof handle.requestPermission !== 'function') return true
+      const options = { mode }
+      if (await handle.queryPermission(options) === 'granted') return true
+      return await handle.requestPermission(options) === 'granted'
+    }
+
+    async function uniqueFileName(directory, name) {
+      const dot = name.lastIndexOf('.')
+      const stem = dot > 0 ? name.slice(0, dot) : name
+      const ext = dot > 0 ? name.slice(dot) : ''
+      let candidate = name
+      let index = 2
+      for (;;) {
+        try {
+          await directory.getFileHandle(candidate)
+          candidate = stem + ' (' + index + ')' + ext
+          index += 1
+        } catch (error) {
+          if (error && error.name === 'NotFoundError') return candidate
+          throw error
+        }
+      }
+    }
+
+    async function chooseDownloadDestination(name) {
+      if (!canUseFileSystemAccess()) return null
+      if (downloadPrefs.mode === 'fixed') {
+        const directory = await ensureFixedDirectory()
+        if (directory !== null && await ensureHandlePermission(directory)) {
+          const fileName = await uniqueFileName(directory, name)
+          const handle = await directory.getFileHandle(fileName, { create: true })
+          return {
+            fixed: true,
+            directory,
+            fileName,
+            handle,
+            label: (directory.name ? directory.name + '\\' : '') + fileName,
+            writable: await handle.createWritable(),
+          }
+        }
+      }
+      const handle = await window.showSaveFilePicker({ suggestedName: name })
+      return {
+        fixed: false,
+        directory: null,
+        fileName: handle.name || name,
+        handle,
+        label: handle.name || name,
+        writable: await handle.createWritable(),
+      }
+    }
+
+    function recordDownload(job) {
+      downloadHistory = [{
+        id: job.id,
+        name: job.name,
+        source: job.source,
+        bytes: job.state === 'done' ? (job.total || job.loaded) : job.loaded,
+        path: job.path || '',
+        state: job.state,
+        error: job.error || '',
+        at: job.endedAt || Date.now(),
+      }, ...downloadHistory].slice(0, MAX_DOWNLOAD_HISTORY)
+      writeDownloadHistory()
+    }
+
+    function finishDownload(job, state, extra = {}) {
+      if (job.finished) return
+      job.finished = true
+      job.state = state
+      job.endedAt = Date.now()
+      Object.assign(job, extra)
+      if (job.abort !== null) {
+        try {
+          job.abort.abort()
+        } catch {
+          /* already finished */
+        }
+      }
+      recordDownload(job)
+      notifyDownloads()
+    }
+
+    async function startDownload({ url, name, source = '' }) {
+      if (typeof url !== 'string' || url.length === 0) throw new Error('下载地址为空')
+      const safeName = String(name || 'download')
+      for (const existing of downloadJobs.values()) {
+        if (!existing.finished && existing.url === url && existing.name === safeName) return existing
+      }
+      const job = {
+        id: ++downloadJobSeq,
+        name: safeName,
+        url,
+        source,
+        state: 'choosing',
+        loaded: 0,
+        total: 0,
+        speed: 0,
+        eta: 0,
+        startedAt: Date.now(),
+        lastSampleAt: Date.now(),
+        lastSampleBytes: 0,
+        lastRenderAt: 0,
+        path: '',
+        error: '',
+        cancelled: false,
+        finished: false,
+        abort: null,
+        writable: null,
+        transferId: null,
+      }
+      downloadJobs.set(job.id, job)
+      trimDownloadJobs()
+      notifyDownloads()
+
+      void (async () => {
+        let destination = null
+        try {
+          try {
+            destination = await chooseDownloadDestination(safeName)
+          } catch (error) {
+            if (error && error.name === 'AbortError') {
+              finishDownload(job, 'cancelled')
+              return
+            }
+            // A save picker can be unavailable in a host that has the API but
+            // refuses the call; the native DSH save bridge remains the fallback.
+            destination = null
+          }
+
+          if (destination === null) {
+            // The desktop native save bridge owns the destination dialog and
+            // final state. Its URL still visits our Host route, so a transfer id
+            // lets the panel show the bytes that Host has actually streamed.
+            const transferId = 'rd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
+            const separator = url.includes('?') ? '&' : '?'
+            const transferUrl = url + separator + 'transfer=' + encodeURIComponent(transferId)
+            const info = boot()
+            job.transferId = transferId
+            job.state = 'native'
+            notifyDownloads()
+            let lastTransfer = null
+            let pollStopped = false
+            const poll = async (force = false) => {
+              if ((pollStopped && !force) || job.finished || info === null) return
+              try {
+                const response = await fetch(apiBase() + '/transfers/' + encodeURIComponent(transferId), {
+                  headers: { 'x-dsh-remote-token': info.token },
+                  cache: 'no-store',
+                })
+                if (!response.ok) return
+                const payload = await response.json()
+                const transfer = payload && payload.transfer
+                if (!transfer || job.finished) return
+                lastTransfer = transfer
+                job.total = Math.max(0, Number(transfer.total) || 0)
+                job.loaded = Math.max(0, Number(transfer.transferred) || 0)
+                if (transfer.state === 'streaming' || transfer.state === 'done') {
+                  job.state = 'downloading'
+                  const now = Date.now()
+                  const elapsed = (now - job.lastSampleAt) / 1000
+                  if (elapsed >= 0.25 && job.loaded >= job.lastSampleBytes) {
+                    job.speed = (job.loaded - job.lastSampleBytes) / elapsed
+                    job.lastSampleBytes = job.loaded
+                    job.lastSampleAt = now
+                  }
+                }
+                notifyDownloads()
+              } catch {
+                /* the native dialog may not have issued the request yet */
+              }
+            }
+            const timer = setInterval(() => { void poll() }, 400)
+            try {
+              const result = await saveDownload(transferUrl, safeName)
+              pollStopped = true
+              clearInterval(timer)
+              await poll(true)
+              if (result && result.status === 'saved') {
+                finishDownload(job, 'done', {
+                  path: result.path || safeName,
+                  total: job.total || job.loaded || (lastTransfer ? lastTransfer.total : 0),
+                })
+              } else if (result && result.status === 'cancelled') {
+                finishDownload(job, 'cancelled')
+              } else if (lastTransfer && lastTransfer.state === 'done') {
+                finishDownload(job, 'done', { path: safeName, total: job.total || job.loaded })
+              } else {
+                finishDownload(job, 'requested')
+              }
+              return
+            } finally {
+              pollStopped = true
+              clearInterval(timer)
+            }
+          }
+
+          job.writable = destination.writable
+          job.path = destination.label
+          job.state = 'downloading'
+          notifyDownloads()
+
+          const abort = new AbortController()
+          job.abort = abort
+          const response = await fetch(url, { signal: abort.signal, cache: 'no-store' })
+          if (!response.ok) {
+            let message = 'HTTP ' + response.status
+            try {
+              const text = await response.text()
+              const parsed = JSON.parse(text)
+              if (parsed && typeof parsed.message === 'string' && parsed.message.length > 0) message = parsed.message
+            } catch {
+              /* keep the status text */
+            }
+            throw new Error(message)
+          }
+          job.total = Math.max(0, Number(response.headers.get('content-length')) || 0)
+          job.lastSampleAt = Date.now()
+          job.lastSampleBytes = 0
+          notifyDownloads()
+
+          if (response.body === null || typeof response.body.getReader !== 'function') {
+            const buffer = await response.arrayBuffer()
+            await destination.writable.write(buffer)
+            job.loaded = buffer.byteLength
+          } else {
+            const reader = response.body.getReader()
+            for (;;) {
+              const chunk = await reader.read()
+              if (chunk.done) break
+              if (job.cancelled) throw Object.assign(new Error('已取消'), { name: 'AbortError' })
+              await destination.writable.write(chunk.value)
+              job.loaded += chunk.value.byteLength
+              const now = Date.now()
+              const elapsed = (now - job.lastSampleAt) / 1000
+              if (elapsed >= 0.25) {
+                job.speed = Math.max(0, (job.loaded - job.lastSampleBytes) / elapsed)
+                job.eta = job.speed > 0 && job.total > 0 ? Math.max(0, (job.total - job.loaded) / job.speed) : 0
+                job.lastSampleAt = now
+                job.lastSampleBytes = job.loaded
+                if (now - job.lastRenderAt >= 150) {
+                  job.lastRenderAt = now
+                  notifyDownloads()
+                }
+              }
+            }
+          }
+          await destination.writable.close()
+          job.speed = 0
+          job.eta = 0
+          finishDownload(job, 'done', { total: job.total || job.loaded, path: destination.label })
+        } catch (error) {
+          try {
+            if (destination && destination.writable) await destination.writable.abort()
+          } catch {
+            /* writer already closed */
+          }
+          try {
+            if (destination && destination.fixed) await destination.directory.removeEntry(destination.fileName)
+          } catch {
+            /* partial file may remain when the filesystem refuses cleanup */
+          }
+          if (job.cancelled || (error && error.name === 'AbortError')) {
+            finishDownload(job, 'cancelled')
+          } else {
+            const message = error instanceof Error ? error.message : String(error)
+            finishDownload(job, 'error', { error: message })
+          }
+        }
+      })()
+      return job
+    }
+
+    function cancelDownload(job) {
+      if (!job || job.finished) return
+      job.cancelled = true
+      try {
+        if (job.abort !== null) job.abort.abort()
+      } catch {
+        /* already aborted */
+      }
+      if (job.transferId) {
+        const info = boot()
+        if (info !== null) {
+          void fetch(apiBase() + '/transfers/' + encodeURIComponent(job.transferId) + '/cancel', {
+            method: 'POST',
+            headers: { 'x-dsh-remote-token': info.token },
+          }).catch(() => {})
+        }
+      }
+      if (job.state !== 'choosing') finishDownload(job, 'cancelled')
+    }
+
+    function closeDownloadJob(job) {
+      if (!job) return
+      downloadJobs.delete(job.id)
+      notifyDownloads()
+    }
+
+    function trimDownloadJobs() {
+      const rows = [...downloadJobs.values()].sort((a, b) => b.startedAt - a.startedAt)
+      for (let index = 6; index < rows.length; index += 1) {
+        if (rows[index].finished) downloadJobs.delete(rows[index].id)
+      }
+    }
+
+    function ensureDownloadPanel() {
+      if (typeof document === 'undefined') return null
+      if (downloadPanel !== null && downloadPanel.isConnected) return downloadPanel
+      downloadPanel = document.createElement('div')
+      downloadPanel.className = 'rd-transfer-panel'
+      downloadPanel.id = 'rd-transfer-panel'
+      document.body.appendChild(downloadPanel)
+      return downloadPanel
+    }
+
+    function renderDownloadPanel() {
+      if (typeof document === 'undefined') return
+      const rows = [...downloadJobs.values()].sort((a, b) => a.startedAt - b.startedAt)
+      if (rows.length === 0) {
+        if (downloadPanel !== null) downloadPanel.remove()
+        downloadPanel = null
+        return
+      }
+      const panel = ensureDownloadPanel()
+      if (panel === null) return
+      panel.textContent = ''
+      for (const job of rows) {
+        const row = document.createElement('div')
+        row.className = 'rd-transfer-row ' + job.state + (job.total === 0 && job.state === 'downloading' ? ' indeterminate' : '')
+        const head = document.createElement('div')
+        head.className = 'rd-transfer-head'
+        const main = document.createElement('div')
+        main.className = 'rd-transfer-main'
+        const name = document.createElement('div')
+        name.className = 'rd-transfer-name'
+        name.textContent = job.name
+        name.title = job.name
+        const meta = document.createElement('div')
+        meta.className = 'rd-transfer-meta'
+        const source = job.source ? ' · ' + job.source : ''
+        let text = ''
+        if (job.state === 'choosing') text = '选择保存位置…'
+        else if (job.state === 'native') text = '等待系统保存…'
+        else if (job.state === 'downloading') {
+          const percent = job.total > 0 ? ' ' + Math.min(100, Math.floor((job.loaded / job.total) * 100)) + '%' : ''
+          text = '下载中' + percent + ' · ' + formatDownloadBytes(job.loaded) + (job.total > 0 ? ' / ' + formatDownloadBytes(job.total) : '')
+        } else if (job.state === 'done') text = '已完成' + (job.path ? ' · ' + job.path : '')
+        else if (job.state === 'cancelled') text = '已取消'
+        else if (job.state === 'requested') text = '已交给浏览器下载'
+        else text = '下载失败' + (job.error ? ' · ' + job.error : '')
+        meta.textContent = text + source
+        main.appendChild(name)
+        main.appendChild(meta)
+        head.appendChild(main)
+        const close = document.createElement('button')
+        close.className = 'rd-transfer-close'
+        close.type = 'button'
+        close.textContent = '×'
+        close.title = '关闭'
+        close.addEventListener('click', () => closeDownloadJob(job))
+        head.appendChild(close)
+        row.appendChild(head)
+
+        const bar = document.createElement('div')
+        bar.className = 'rd-transfer-bar'
+        const fill = document.createElement('div')
+        fill.className = 'rd-transfer-fill'
+        if (job.state === 'done') fill.style.width = '100%'
+        else if (job.state === 'error' || job.state === 'cancelled') fill.style.width = '0%'
+        else if (job.total > 0) fill.style.width = Math.min(100, Math.floor((job.loaded / job.total) * 100)) + '%'
+        bar.appendChild(fill)
+        row.appendChild(bar)
+
+        const foot = document.createElement('div')
+        foot.className = 'rd-transfer-foot'
+        if (job.state === 'downloading') {
+          const speed = document.createElement('span')
+          speed.textContent = job.speed > 0 ? formatDownloadBytes(job.speed) + '/s' : '正在读取…'
+          foot.appendChild(speed)
+          if (job.eta > 0) {
+            const eta = document.createElement('span')
+            eta.textContent = '剩余 ' + formatDownloadDuration(job.eta)
+            foot.appendChild(eta)
+          }
+          const cancel = document.createElement('button')
+          cancel.type = 'button'
+          cancel.className = 'rd-transfer-btn danger sp'
+          cancel.textContent = '取消'
+          cancel.addEventListener('click', () => cancelDownload(job))
+          foot.appendChild(cancel)
+        } else if (job.state === 'error') {
+          const error = document.createElement('span')
+          error.className = 'sp'
+          error.textContent = '可重新下载'
+          foot.appendChild(error)
+        } else {
+          const time = document.createElement('span')
+          time.className = 'sp'
+          time.textContent = ago(job.endedAt || job.startedAt) || ''
+          foot.appendChild(time)
+        }
+        row.appendChild(foot)
+        panel.appendChild(row)
+      }
+    }
+
+    try {
+      if (boot() && boot().debug === true) {
+        globalThis.__RD_DOWNLOAD_TEST__ = {
+          start: startDownload,
+          cancel: cancelDownload,
+          jobs: () => [...downloadJobs.values()],
+          history: () => downloadHistory.slice(),
+          prefs: () => ({ ...downloadPrefs }),
+          setMode: (mode) => {
+            downloadPrefs = { mode: mode === 'fixed' ? 'fixed' : 'ask' }
+            writeDownloadPrefs()
+            notifyDownloads()
+          },
+          clearHistory: () => {
+            downloadHistory = []
+            writeDownloadHistory()
+            notifyDownloads()
+          },
+        }
+      }
+    } catch {
+      /* debug hook is optional */
+    }
+
     async function refresh() {
       if (boot() === null) {
         store.ready = false
@@ -719,6 +1324,26 @@ window.__ModuleLoader__.load({
 .rd-download-toast { position: fixed; right: 18px; bottom: 18px; z-index: 9999; max-width: min(460px, calc(100vw - 36px)); padding: 10px 13px; border-radius: 9px; border: 1px solid var(--dsw-alias-border-l1, #e8e8ec); background: var(--dsw-alias-bg-layer-1, #fff); color: var(--dsw-alias-label-primary, #1f2329); box-shadow: 0 8px 28px rgba(0,0,0,.18); font-size: 12px; line-height: 1.5; word-break: break-all; opacity: 0; transform: translateY(6px); transition: opacity .16s ease, transform .16s ease; pointer-events: none; }
 .rd-download-toast.show { opacity: 1; transform: translateY(0); }
 .rd-download-toast.error { border-color: #dc2626; color: #b91c1c; }
+      .rd-transfer-panel { position:fixed; right:18px; bottom:18px; z-index:9999; width:min(390px,calc(100vw - 36px)); display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+      .rd-transfer-row { pointer-events:auto; border:1px solid var(--dsw-alias-border-l1,#e8e8ec); border-radius:10px; background:var(--dsw-alias-bg-layer-1,#fff); color:var(--dsw-alias-label-primary,#1f2329); box-shadow:0 10px 30px rgba(16,24,40,.18); padding:10px 12px; }
+      .rd-transfer-head { display:flex; align-items:flex-start; gap:8px; }
+      .rd-transfer-main { min-width:0; flex:1; }
+      .rd-transfer-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:650; }
+      .rd-transfer-meta { margin-top:3px; color:var(--dsw-alias-label-secondary,#8f959e); font-size:10.5px; line-height:1.5; }
+      .rd-transfer-close { flex:none; border:0; background:transparent; color:var(--dsw-alias-label-tertiary,#a3a8b0); cursor:pointer; font-size:14px; line-height:1; padding:1px 2px; }
+      .rd-transfer-bar { height:5px; margin-top:8px; border-radius:99px; background:rgba(15,23,42,.1); overflow:hidden; }
+      .rd-transfer-fill { height:100%; width:0; border-radius:99px; background:#2f7ddd; transition:width .18s linear; }
+      .rd-transfer-row.done .rd-transfer-fill { background:#2ea043; }
+      .rd-transfer-row.error .rd-transfer-fill { background:#dc2626; }
+      .rd-transfer-row.cancelled .rd-transfer-fill { background:#8f959e; }
+      .rd-transfer-row.indeterminate .rd-transfer-fill { width:35%; animation:rd-transfer-slide 1.3s ease-in-out infinite; }
+      .rd-transfer-foot { display:flex; align-items:center; gap:8px; margin-top:5px; color:var(--dsw-alias-label-secondary,#8f959e); font-size:10px; }
+      .rd-transfer-foot .sp { margin-left:auto; white-space:nowrap; }
+      .rd-transfer-btn { border:0; background:transparent; color:#2f7ddd; cursor:pointer; font-size:10px; padding:1px 3px; }
+      .rd-transfer-btn.danger { color:#b42318; }
+      @keyframes rd-transfer-slide { 0% { transform:translateX(-110%) } 50% { transform:translateX(190%) } 100% { transform:translateX(-110%) } }
+      [data-rd-theme="dark"] .rd-transfer-row { background:#1b1e24; border-color:rgba(255,255,255,.12); color:#e6e8eb; }
+      [data-rd-theme="dark"] .rd-transfer-bar { background:rgba(255,255,255,.14); }
       .rd-cpane > .rd-status { margin: 8px 0 10px; }
       [data-rd-theme="dark"] .rd-status { background: rgba(255,255,255,.05); }
       [data-rd-theme="dark"] .rd-status.bad { background: rgba(255,107,92,.12); color: #ff8f82; }
@@ -1186,6 +1811,15 @@ window.__ModuleLoader__.load({
       .rd-set-seg { display:flex;gap:6px;padding:2px 0 10px }
       .rd-set-segbtn { min-width:64px;height:30px;border:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.12));border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary,#5f6672);font:inherit;font-size:11px;cursor:pointer }
       .rd-set-segbtn.on { border-color:#a9c9ec;background:rgba(47,125,221,.08);color:#175a99;font-weight:600 }
+      .rd-dl-setting-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap }
+      .rd-dl-history { display:flex;flex-direction:column }
+      .rd-dl-history-row { display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.06));font-size:10.5px;color:var(--dsw-alias-label-secondary,#5f6672) }
+      .rd-dl-history-row:last-child { border-bottom:0 }
+      .rd-dl-history-row .nm { min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary,#1f2329) }
+      .rd-dl-history-row .st { flex:none }
+      .rd-dl-history-row .st.ok { color:#1a7f37 }
+      .rd-dl-history-row .st.bad { color:#b42318 }
+      .rd-dl-history-row .sz,.rd-dl-history-row .tm { flex:none;white-space:nowrap }
       .rd-set-empty { padding:8px 0;font-size:10.8px;color:var(--dsw-alias-label-secondary,#8f959e) }
       .rd-set-noteitem { display:flex;gap:8px;padding:9px 0;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(15,23,42,.06));align-items:flex-start }
       .rd-set-noteitem:last-child { border-bottom:0 }
@@ -2759,7 +3393,6 @@ window.__ModuleLoader__.load({
       const [page, setPage] = React.useState({ total: 0, offset: 0, limit: 500, hasMore: false })
       const [loading, setLoading] = React.useState(false)
       const [loadingMore, setLoadingMore] = React.useState(false)
-      const [downloading, setDownloading] = React.useState('')
       const [error, setError] = React.useState('')
       const [filter, setFilter] = React.useState('')
       const [notice, setNotice] = React.useState('')
@@ -2804,36 +3437,15 @@ window.__ModuleLoader__.load({
       }, [host.id])
 
       async function download(entry) {
-        if (downloading === entry.path) return
         const info = boot()
         if (info === null) return
         const url = apiBase() + '/connections/' + host.id + '/download?path=' + encodeURIComponent(entry.path) + '&token=' + encodeURIComponent(info.token)
         setError('')
         setNotice('')
-        setDownloading(entry.path)
-        showDownloadToast('请选择保存位置：' + entry.name)
-        try {
-          const result = await saveDownload(url, entry.name)
-          if (result && result.status === 'saved') {
-            setNotice('已保存到 ' + result.path)
-            showDownloadToast('已保存到 ' + result.path)
-          } else if (result && result.status === 'cancelled') {
-            setNotice('已取消保存')
-            showDownloadToast('已取消保存')
-          } else if (result && result.status === 'browser-fallback') {
-            setNotice('当前桌面版本不支持应用内下载，已使用浏览器下载 ' + entry.name)
-            showDownloadToast('当前桌面版本不支持应用内下载，已使用浏览器下载', 'error')
-          } else {
-            setNotice('已开始下载 ' + entry.name)
-            showDownloadToast('已开始下载 ' + entry.name)
-          }
-        } catch (failure) {
+        void startDownload({ url, name: entry.name, source: host.name }).catch((failure) => {
           const message = failure instanceof Error ? failure.message : String(failure)
           setError(message)
-          showDownloadToast('下载失败：' + message, 'error')
-        } finally {
-          setDownloading('')
-        }
+        })
       }
 
       async function saveLocal(entry) {
@@ -2895,9 +3507,8 @@ window.__ModuleLoader__.load({
             h('span', { className: 'rd-factions' },
               entry.type === 'dir' ? null : h('button', {
                 className: 'rd-btn sm',
-                disabled: downloading === entry.path,
                 onClick: (event) => { event.stopPropagation(); void download(entry) },
-              }, downloading === entry.path ? '下载中…' : '下载'),
+              }, '下载'),
               entry.type === 'dir' ? null : h('button', {
                 className: 'rd-btn sm',
                 onClick: (event) => { event.stopPropagation(); void saveLocal(entry) },
@@ -3395,6 +4006,21 @@ window.__ModuleLoader__.load({
       const [editor, setEditor] = React.useState(null)
       const [error, setError] = React.useState('')
       const [busy, setBusy] = React.useState('')
+      const [downloadVersion, setDownloadVersion] = React.useState(0)
+      const [downloadDirName, setDownloadDirName] = React.useState('')
+      const [downloadBusy, setDownloadBusy] = React.useState('')
+
+      React.useEffect(() => {
+        const off = subscribeDownloads(() => setDownloadVersion((value) => value + 1))
+        let alive = true
+        void ensureFixedDirectory().then((handle) => {
+          if (alive) setDownloadDirName(handle ? handle.name || '' : '')
+        }).catch(() => {})
+        return () => {
+          alive = false
+          off()
+        }
+      }, [])
 
       const load = React.useCallback(async () => {
         try {
@@ -3485,6 +4111,104 @@ window.__ModuleLoader__.load({
         h('div', { className: 'ctl' }, control),
       )
 
+      const setAskMode = () => {
+        downloadPrefs = { mode: 'ask' }
+        writeDownloadPrefs()
+        setError('')
+        notifyDownloads()
+      }
+
+      const pickDownloadDirectory = async () => {
+        setDownloadBusy('directory')
+        setError('')
+        try {
+          const handle = await chooseFixedDirectory()
+          setDownloadDirName(handle ? handle.name || '' : '')
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+        setDownloadBusy('')
+      }
+
+      const applyFixedMode = () => {
+        if (downloadPrefs.mode === 'fixed') return
+        downloadPrefs = { mode: 'fixed' }
+        writeDownloadPrefs()
+        setError('')
+        notifyDownloads()
+      }
+
+      const clearDownloadDirectory = async () => {
+        setDownloadBusy('directory')
+        setError('')
+        try {
+          await clearFixedDirectory()
+          setDownloadDirName('')
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+        setDownloadBusy('')
+      }
+
+      const downloads = h(React.Fragment, null,
+        h('div', { className: 'rd-set-head' },
+          h('div', { className: 't' }, '下载'),
+          h('div', { className: 's' }, '远程文件和本机文件共用同一套保存位置、进度和结果记录。'),
+        ),
+        error ? h('div', { className: 'rd-set-error' }, error) : null,
+        h('div', { className: 'rd-set-card' },
+          h('div', { className: 'rd-set-cardhead' }, '保存位置'),
+          row('每次询问', '点击下载后弹出系统保存位置；默认行为。',
+            h('button', {
+              className: 'rd-set-segbtn' + (downloadPrefs.mode === 'ask' ? ' on' : ''),
+              disabled: downloadBusy !== '',
+              onClick: setAskMode,
+            }, '每次询问')),
+          row('固定目录', downloadDirName ? '直接保存到：' + downloadDirName : '选择一个本机目录，之后不再弹保存框。',
+            h('div', { className: 'rd-dl-setting-actions' },
+              h('button', {
+                className: 'rd-btn sm',
+                disabled: downloadBusy !== '' || !canUseFileSystemAccess() || typeof window.showDirectoryPicker !== 'function',
+                onClick: () => void pickDownloadDirectory(),
+              }, downloadBusy === 'directory' ? '选择中…' : (downloadDirName ? '更换目录' : '选择目录')),
+              downloadDirName && downloadPrefs.mode !== 'fixed'
+                ? h('button', { className: 'rd-btn sm', disabled: downloadBusy !== '', onClick: applyFixedMode }, '使用此目录')
+                : null,
+              downloadDirName
+                ? h('button', { className: 'rd-btn sm', disabled: downloadBusy !== '', onClick: () => void clearDownloadDirectory() }, '清除')
+                : null,
+            )),
+          canUseFileSystemAccess() && typeof window.showDirectoryPicker === 'function'
+            ? null
+            : h('div', { className: 'rd-set-desc' }, '当前环境不支持应用内固定目录；仍会每次弹出系统保存位置。'),
+        ),
+        h('div', { className: 'rd-set-card' },
+          h('div', { className: 'rd-set-cardhead' }, '最近下载',
+            downloadHistory.length > 0
+              ? h('button', {
+                  className: 'rd-btn sm',
+                  onClick: () => {
+                    downloadHistory = []
+                    writeDownloadHistory()
+                    notifyDownloads()
+                  },
+                }, '清空')
+              : null,
+          ),
+          downloadHistory.length === 0
+            ? h('div', { className: 'rd-set-empty' }, '还没有下载记录。')
+            : h('div', { className: 'rd-dl-history' },
+                downloadHistory.slice(0, 10).map((entry) => h('div', { className: 'rd-dl-history-row', key: entry.id + ':' + entry.at },
+                  h('span', { className: 'nm', title: entry.name }, entry.name),
+                  h('span', { className: 'st ' + (entry.state === 'error' ? 'bad' : entry.state === 'done' ? 'ok' : '') },
+                    entry.state === 'done' ? '完成' : entry.state === 'requested' ? '浏览器下载' : entry.state === 'cancelled' ? '取消' : '失败'),
+                  h('span', { className: 'sz' }, formatDownloadBytes(entry.bytes)),
+                  h('span', { className: 'tm' }, ago(entry.at) || ''),
+                )),
+              ),
+        ),
+      )
+
       const memory = h(React.Fragment, null,
         h('div', { className: 'rd-set-head' },
           h('div', { className: 't' }, '记忆'),
@@ -3559,10 +4283,11 @@ window.__ModuleLoader__.load({
         h('aside', { className: 'rd-set-nav' },
           h('div', { className: 'rd-set-navtitle' }, '设置'),
           h('button', { className: 'rd-set-navitem' + (section === 'memory' ? ' on' : ''), onClick: () => setSection('memory') }, h(Icon, { name: 'sliders', size: 13 }), '记忆'),
+          h('button', { className: 'rd-set-navitem' + (section === 'downloads' ? ' on' : ''), onClick: () => setSection('downloads') }, h(Icon, { name: 'download', size: 13 }), '下载'),
           h('button', { className: 'rd-set-navitem' + (section === 'diagnostics' ? ' on' : ''), onClick: () => setSection('diagnostics') }, h(Icon, { name: 'server', size: 13 }), '数据与诊断'),
           h('div', { className: 'rd-set-navfoot' }, PRODUCT_NAME),
         ),
-        h('section', { className: 'rd-set-main' }, section === 'memory' ? memory : diagnostics),
+        h('section', { className: 'rd-set-main' }, section === 'memory' ? memory : section === 'downloads' ? downloads : diagnostics),
         editor
           ? h('div', { className: 'rd-mem2-overlay', onClick: () => setEditor(null) },
               h('div', { className: 'rd-mem2-modal', onClick: (event) => event.stopPropagation() },
@@ -3945,49 +4670,30 @@ window.__ModuleLoader__.load({
 
     function PreviewDownloadAction(props) {
       const remote = useRemote(props.sessionId)
-      const [downloadStatus, setDownloadStatus] = React.useState('')
       if (!remote || !props.absolutePath) return null
       const target = String(props.absolutePath)
       const info = boot()
       if (info === null) return null
-      const download = async () => {
-        if (downloadStatus === '选择位置…') return
+      const download = () => {
         const href = downloadUrlFor(remote.connectionId, target)
         if (href.length === 0) return
-        const name = downloadNameFor(target)
-        setDownloadStatus('选择位置…')
-        showDownloadToast('请选择保存位置：' + name)
-        try {
-          const result = await saveDownload(href, name)
-          if (result && result.status === 'saved') {
-            setDownloadStatus('已保存到本机')
-            showDownloadToast('已保存到 ' + result.path)
-          } else if (result && result.status === 'cancelled') {
-            setDownloadStatus('已取消保存')
-            showDownloadToast('已取消保存')
-          } else {
-            setDownloadStatus('已开始下载')
-            showDownloadToast('已开始下载 ' + name)
-          }
-        } catch (failure) {
-          setDownloadStatus('下载失败')
+        const source = isLocalAbsolute(target) ? '本机' : (remote.host || '远程')
+        void startDownload({ url: href, name: downloadNameFor(target), source }).catch((failure) => {
           showDownloadToast('下载失败：' + (failure instanceof Error ? failure.message : String(failure)), 'error')
-        }
+        })
       }
       return h('button', {
         type: 'button',
         className: 'rd-dl',
-        title: downloadStatus || ('下载到本机：' + target),
+        title: '下载到本机：' + target,
         'aria-label': '下载到本机',
-        disabled: downloadStatus === '选择位置…',
-        onClick: () => void download(),
+        onClick: () => download(),
       }, h(Icon, { name: 'download', size: 16 }))
     }
 
     function DeliverableDownloadAction(props) {
       const remote = useRemote(props.sessionId)
       const wrapRef = React.useRef(null)
-      const [downloadStatus, setDownloadStatus] = React.useState('')
       if (!remote) return null
       const resolveTarget = () => {
         const card = wrapRef.current && wrapRef.current.closest ? wrapRef.current.closest('[data-presented-file]') : null
@@ -4005,42 +4711,25 @@ window.__ModuleLoader__.load({
         const match = label.match(/\/[^\s"']+/)
         return match === null ? '' : match[0]
       }
-      const download = async () => {
-        if (downloadStatus === '选择位置…') return
+      const download = () => {
         const target = resolveTarget()
         if (target.length === 0) return
         const info = boot()
         if (info === null) return
         const href = downloadUrlFor(remote.connectionId, target)
         if (href.length === 0) return
-        const name = downloadNameFor(target)
-        setDownloadStatus('选择位置…')
-        showDownloadToast('请选择保存位置：' + name)
-        try {
-          const result = await saveDownload(href, name)
-          if (result && result.status === 'saved') {
-            setDownloadStatus('已保存到本机')
-            showDownloadToast('已保存到 ' + result.path)
-          } else if (result && result.status === 'cancelled') {
-            setDownloadStatus('已取消保存')
-            showDownloadToast('已取消保存')
-          } else {
-            setDownloadStatus('已开始下载')
-            showDownloadToast('已开始下载 ' + name)
-          }
-        } catch (failure) {
-          setDownloadStatus('下载失败')
+        const source = isLocalAbsolute(target) ? '本机' : (remote.host || '远程')
+        void startDownload({ url: href, name: downloadNameFor(target), source }).catch((failure) => {
           showDownloadToast('下载失败：' + (failure instanceof Error ? failure.message : String(failure)), 'error')
-        }
+        })
       }
       return h('span', { ref: wrapRef, className: 'rd-dl-wrap' },
         h('button', {
           type: 'button',
           className: 'rd-dl',
-          title: downloadStatus || '下载到本机',
+          title: '下载到本机',
           'aria-label': '下载到本机',
-          disabled: downloadStatus === '选择位置…',
-          onClick: () => void download(),
+          onClick: () => download(),
         }, h(Icon, { name: 'download', size: 16 })),
       )
     }
@@ -4321,6 +5010,10 @@ window.__ModuleLoader__.load({
         if (node) node.remove()
         const statusNode = document.querySelector('style[' + WORKSPACE_STATUS_STYLE_ATTR + ']')
         if (statusNode) statusNode.remove()
+        const transferPanel = document.getElementById('rd-transfer-panel')
+        if (transferPanel) transferPanel.remove()
+        const downloadToast = document.getElementById('rd-download-toast')
+        if (downloadToast) downloadToast.remove()
         workspaceStatusCss = ''
       }, 'remote-deck: styles')
     }

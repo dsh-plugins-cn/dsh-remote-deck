@@ -39,6 +39,7 @@ addresses and paths are demo data (`dev-box`, `203.0.113.10`, `/srv/demo-app`).
 | Workspaces | Browse remote folders with breadcrumbs, filters and keyboard navigation; add one as a DSH workspace; custom sidebar name; remove locally without touching the remote directory. Each remote workspace row shows a small connection status dot in the grouped/tree sidebar view |
 | Sessions | Remote sessions get a header pill and a hover line; local sessions are unchanged. Sidebar session rows keep DSH's native leading cell, so remote and local rows align exactly |
 | Console | Machine rail, host overview, stats, workspace cards, recent sessions, search, and a remote file browser with download / save-to-local / reveal |
+| Downloads | Remote and local source files save through the same local transfer panel: bytes, speed, ETA, cancel and a persistent result/history. Default is a save dialog every time; Settings → 下载 can use a fixed directory instead |
 | Terminal | Remote PTY in a full xterm.js terminal: colours, cursor, full-screen programs, paste and replay buffer |
 | Ports | Automatic discovery of remote listening ports, one-click forwarding, persistence and restore on reconnect |
 | Memory | Remote memory (off by default): plugin and per-machine switches, machine/workspace briefs, notes, a ≤2 KB summary injected into new remote sessions, and a `remote_memory` tool; data stays local |

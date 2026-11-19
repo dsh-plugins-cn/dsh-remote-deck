@@ -80,6 +80,11 @@
   `sidebar.session.row.hover`、`conversation.session.header.utilities`。
   侧栏不再注册 `sidebar.panellist`，因此没有独立导航入口；控制台通过
   `ctx.layout.selectPanel('remote-deck')` 打开。
+- **下载**：`/local/download` 服务于本机绝对路径（realpath 后的真实文件），不再按
+  DSH_HOME 限流；loopback token 与 DSH 本机文件读取语义是边界。远程文件仍走
+  `/connections/:id/download`。两条路由都可带 `transfer=<id>`，客户端轮询
+  `/transfers/<id>` 获取原生保存过程中的已传输字节；FSA 可用时客户端自己读流并
+  写入保存目标。
 - **Host 侧新增能力**：在 `lib/` 下加模块（如 terminal.js、forwards.js），在 `index.js` 组装，
   在 `lib/api.js` 加回环路由；客户端通过 `call()` 访问。
 - **数据模型**：连接在 `connections.json`（含颜色/自动连接），工作区是带 `.dsh-remote.json`

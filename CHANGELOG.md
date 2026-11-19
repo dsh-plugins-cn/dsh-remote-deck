@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.6.5] - 2026-11-19
+
+### Added
+
+- Unified download-to-local flow for remote and local sources. The conversation file
+  cards, preview download and console file list now share one transfer panel with
+  bytes, speed, ETA, cancel and a persistent terminal state.
+- Optional **固定目录** save mode: choose a directory once with the File System Access
+  API, then downloads go there without a save dialog; default remains **每次询问**.
+  Download history is available under Settings → 下载.
+- Host download-transfer status for native desktop saves, so a native Save-As can also
+  show streamed bytes instead of an opaque wait.
+
+### Fixed
+
+- Local file downloads outside DSH_HOME no longer return `LOCAL_PATH_DENIED`. The local
+  download route resolves real paths and uses the same user permission model as DSH
+  local file access; no separate plugin directory whitelist or second authorization is
+  introduced.
+
+### Verified
+
+- `npm run check`; `node --test` (52/52); local Host route header tests; mocked FSA
+  stream, cancel and fixed-directory tests; native fallback status probe.
+- 1.6.4 → 1.6.5 deckcheck upgrade and real conversation file-card integration.
+
 ## [1.6.4] - 2026-11-16
 
 ### Changed
