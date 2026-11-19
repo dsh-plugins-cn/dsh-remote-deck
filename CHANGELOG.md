@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.6.7] - 2026-11-19
+
+### Changed
+
+- Download status is now a lightweight two-row capsule instead of a large card:
+  filename, percentage/speed, a 3px progress line and a small cancel control.
+  Terminal states become one line and disappear after **3 seconds** for success,
+  failure and cancellation alike.
+- The capsule appears only after the transfer actually starts. While the
+  destination picker is open (or when it is cancelled) no plugin status is added;
+  native Save-As appears once Host reports the stream.
+- The capsule sits above the composer instead of covering the input area.
+
 ## [1.6.6] - 2026-11-19
 
 ### Changed

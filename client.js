@@ -255,6 +255,7 @@ window.__ModuleLoader__.load({
     const downloadSubscribers = new Set()
     let downloadJobSeq = 0
     let downloadPanel = null
+    let downloadPanelResizeBound = false
     let fixedDirectoryHandle = null
     let fixedDirectoryLoaded = false
     let fixedDirectoryLoading = null
@@ -498,13 +499,18 @@ window.__ModuleLoader__.load({
         }
       }
       recordDownload(job)
-      // The panel is a progress surface, not a permanent notification tray.
-      // Keep the terminal state briefly, then let the history in Settings own it.
-      const dismissDelay = state === 'error' ? 10000 : state === 'cancelled' ? 4000 : 6000
-      job.dismissTimer = setTimeout(() => {
-        job.dismissTimer = null
-        closeDownloadJob(job)
-      }, dismissDelay)
+      // The panel is a progress surface, not a notification tray. Every terminal
+      // state gets the same short three-second tail; Settings owns the record.
+      if (job.visible) {
+        job.dismissTimer = setTimeout(() => {
+          job.dismissTimer = null
+          closeDownloadJob(job)
+        }, 3000)
+      } else {
+        // A cancelled save dialog or a failure before transfer started never
+        // creates a toast in the first place.
+        downloadJobs.delete(job.id)
+      }
       notifyDownloads()
     }
 
@@ -520,6 +526,7 @@ window.__ModuleLoader__.load({
         url,
         source,
         state: 'choosing',
+        visible: false,
         loaded: 0,
         total: 0,
         speed: 0,
@@ -584,6 +591,7 @@ window.__ModuleLoader__.load({
                 job.total = Math.max(0, Number(transfer.total) || 0)
                 job.loaded = Math.max(0, Number(transfer.transferred) || 0)
                 if (transfer.state === 'streaming' || transfer.state === 'done') {
+                  job.visible = true
                   job.state = 'downloading'
                   const now = Date.now()
                   const elapsed = (now - job.lastSampleAt) / 1000
@@ -605,6 +613,7 @@ window.__ModuleLoader__.load({
               clearInterval(timer)
               await poll(true)
               if (result && result.status === 'saved') {
+                if (!job.visible) job.visible = true
                 finishDownload(job, 'done', {
                   path: result.path || safeName,
                   total: job.total || job.loaded || (lastTransfer ? lastTransfer.total : 0),
@@ -625,6 +634,7 @@ window.__ModuleLoader__.load({
 
           job.writable = destination.writable
           job.path = destination.label
+          job.visible = true
           job.state = 'downloading'
           notifyDownloads()
 
@@ -749,12 +759,20 @@ window.__ModuleLoader__.load({
       downloadPanel.className = 'rd-transfer-panel'
       downloadPanel.id = 'rd-transfer-panel'
       document.body.appendChild(downloadPanel)
+      if (!downloadPanelResizeBound && typeof window !== 'undefined') {
+        downloadPanelResizeBound = true
+        window.addEventListener('resize', () => {
+          if (downloadPanel !== null) renderDownloadPanel()
+        })
+      }
       return downloadPanel
     }
 
     function renderDownloadPanel() {
       if (typeof document === 'undefined') return
-      const rows = [...downloadJobs.values()].sort((a, b) => a.startedAt - b.startedAt)
+      const rows = [...downloadJobs.values()]
+        .filter((job) => job.visible === true)
+        .sort((a, b) => a.startedAt - b.startedAt)
       if (rows.length === 0) {
         if (downloadPanel !== null) downloadPanel.remove()
         downloadPanel = null
@@ -762,83 +780,77 @@ window.__ModuleLoader__.load({
       }
       const panel = ensureDownloadPanel()
       if (panel === null) return
+      // Follow the composer: place the capsule just above the input card, not
+      // at a hard-coded offset that can cover it at short window heights.
+      let bottom = 118
+      try {
+        const textbox = document.querySelector('[role="textbox"]')
+        if (textbox !== null) {
+          const rect = textbox.getBoundingClientRect()
+          if (rect.width > 0 && rect.height > 0) bottom = Math.max(16, Math.round(window.innerHeight - rect.top + 8))
+        }
+      } catch {
+        /* use the fallback */
+      }
+      panel.style.bottom = bottom + 'px'
       panel.textContent = ''
       for (const job of rows) {
+        const active = job.state === 'downloading'
+        const terminal = ['done', 'cancelled', 'requested', 'error'].includes(job.state)
         const row = document.createElement('div')
-        row.className = 'rd-transfer-row ' + job.state + (job.total === 0 && job.state === 'downloading' ? ' indeterminate' : '')
-        const head = document.createElement('div')
-        head.className = 'rd-transfer-head'
-        const main = document.createElement('div')
-        main.className = 'rd-transfer-main'
-        const name = document.createElement('div')
+        row.className = 'rd-transfer-row ' + job.state +
+          (terminal ? ' terminal' : '') +
+          (active && job.total === 0 ? ' indeterminate' : '')
+        const line = document.createElement('div')
+        line.className = 'rd-transfer-line'
+
+        const glyph = document.createElement('span')
+        glyph.className = 'rd-transfer-glyph ' +
+          (job.state === 'done' ? 'ok' : job.state === 'error' ? 'bad' : job.state === 'cancelled' ? 'muted' : '')
+        glyph.textContent = job.state === 'done' ? '✓' : job.state === 'error' ? '!' : job.state === 'cancelled' ? '×' : '↓'
+        line.appendChild(glyph)
+
+        const name = document.createElement('span')
         name.className = 'rd-transfer-name'
         name.textContent = job.name
         name.title = job.name
-        const meta = document.createElement('div')
-        meta.className = 'rd-transfer-meta'
-        const source = job.source ? ' · ' + job.source : ''
-        let text = ''
-        if (job.state === 'choosing') text = '选择保存位置…'
-        else if (job.state === 'native') text = '等待系统保存…'
-        else if (job.state === 'downloading') {
-          const percent = job.total > 0 ? ' ' + Math.min(100, Math.floor((job.loaded / job.total) * 100)) + '%' : ''
-          text = '下载中' + percent + ' · ' + formatDownloadBytes(job.loaded) + (job.total > 0 ? ' / ' + formatDownloadBytes(job.total) : '')
-        } else if (job.state === 'done') text = '已完成' + (job.path ? ' · ' + job.path : '')
-        else if (job.state === 'cancelled') text = '已取消'
-        else if (job.state === 'requested') text = '已交给浏览器下载'
-        else text = '下载失败' + (job.error ? ' · ' + job.error : '')
-        meta.textContent = text + source
-        main.appendChild(name)
-        main.appendChild(meta)
-        head.appendChild(main)
-        const close = document.createElement('button')
-        close.className = 'rd-transfer-close'
-        close.type = 'button'
-        close.textContent = '×'
-        close.title = '关闭'
-        close.addEventListener('click', () => closeDownloadJob(job))
-        head.appendChild(close)
-        row.appendChild(head)
+        line.appendChild(name)
 
-        const bar = document.createElement('div')
-        bar.className = 'rd-transfer-bar'
-        const fill = document.createElement('div')
-        fill.className = 'rd-transfer-fill'
-        if (job.state === 'done') fill.style.width = '100%'
-        else if (job.state === 'error' || job.state === 'cancelled') fill.style.width = '0%'
-        else if (job.total > 0) fill.style.width = Math.min(100, Math.floor((job.loaded / job.total) * 100)) + '%'
-        bar.appendChild(fill)
-        row.appendChild(bar)
+        const status = document.createElement('span')
+        status.className = 'rd-transfer-status'
+        if (job.state === 'done') status.textContent = '已保存'
+        else if (job.state === 'error') {
+          const reason = String(job.error || '').replace(/\s+/g, ' ').trim()
+          status.textContent = reason ? '失败 · ' + reason.slice(0, 28) : '失败'
+          status.title = job.error || ''
+        } else if (job.state === 'cancelled') status.textContent = '已取消'
+        else if (job.state === 'requested') status.textContent = '已交给浏览器'
+        else {
+          const percent = job.total > 0 ? Math.min(100, Math.floor((job.loaded / job.total) * 100)) + '%' : ''
+          const speed = job.speed > 0 ? formatDownloadBytes(job.speed) + '/s' : ''
+          status.textContent = [percent, speed].filter(Boolean).join(' · ') || '下载中'
+        }
+        line.appendChild(status)
 
-        const foot = document.createElement('div')
-        foot.className = 'rd-transfer-foot'
-        if (job.state === 'downloading') {
-          const speed = document.createElement('span')
-          speed.textContent = job.speed > 0 ? formatDownloadBytes(job.speed) + '/s' : '正在读取…'
-          foot.appendChild(speed)
-          if (job.eta > 0) {
-            const eta = document.createElement('span')
-            eta.textContent = '剩余 ' + formatDownloadDuration(job.eta)
-            foot.appendChild(eta)
-          }
+        if (active) {
           const cancel = document.createElement('button')
           cancel.type = 'button'
-          cancel.className = 'rd-transfer-btn danger sp'
+          cancel.className = 'rd-transfer-cancel'
           cancel.textContent = '取消'
           cancel.addEventListener('click', () => cancelDownload(job))
-          foot.appendChild(cancel)
-        } else if (job.state === 'error') {
-          const error = document.createElement('span')
-          error.className = 'sp'
-          error.textContent = '可重新下载'
-          foot.appendChild(error)
-        } else {
-          const time = document.createElement('span')
-          time.className = 'sp'
-          time.textContent = ago(job.endedAt || job.startedAt) || ''
-          foot.appendChild(time)
+          line.appendChild(cancel)
         }
-        row.appendChild(foot)
+        row.appendChild(line)
+
+        if (active) {
+          const bar = document.createElement('div')
+          bar.className = 'rd-transfer-bar'
+          const fill = document.createElement('div')
+          fill.className = 'rd-transfer-fill'
+          if (job.total > 0) fill.style.width = Math.min(100, Math.floor((job.loaded / job.total) * 100)) + '%'
+          bar.appendChild(fill)
+          row.appendChild(bar)
+        }
         panel.appendChild(row)
       }
     }
@@ -1342,26 +1354,29 @@ window.__ModuleLoader__.load({
 .rd-download-toast { position: fixed; right: 18px; bottom: 18px; z-index: 9999; max-width: min(460px, calc(100vw - 36px)); padding: 10px 13px; border-radius: 9px; border: 1px solid var(--dsw-alias-border-l1, #e8e8ec); background: var(--dsw-alias-bg-layer-1, #fff); color: var(--dsw-alias-label-primary, #1f2329); box-shadow: 0 8px 28px rgba(0,0,0,.18); font-size: 12px; line-height: 1.5; word-break: break-all; opacity: 0; transform: translateY(6px); transition: opacity .16s ease, transform .16s ease; pointer-events: none; }
 .rd-download-toast.show { opacity: 1; transform: translateY(0); }
 .rd-download-toast.error { border-color: #dc2626; color: #b91c1c; }
-      .rd-transfer-panel { position:fixed; right:18px; bottom:18px; z-index:9999; width:min(390px,calc(100vw - 36px)); display:flex; flex-direction:column; gap:8px; pointer-events:none; }
-      .rd-transfer-row { pointer-events:auto; border:1px solid var(--dsw-alias-border-l1,#e8e8ec); border-radius:10px; background:var(--dsw-alias-bg-layer-1,#fff); color:var(--dsw-alias-label-primary,#1f2329); box-shadow:0 10px 30px rgba(16,24,40,.18); padding:10px 12px; }
-      .rd-transfer-head { display:flex; align-items:flex-start; gap:8px; }
-      .rd-transfer-main { min-width:0; flex:1; }
-      .rd-transfer-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:650; }
-      .rd-transfer-meta { margin-top:3px; color:var(--dsw-alias-label-secondary,#8f959e); font-size:10.5px; line-height:1.5; }
-      .rd-transfer-close { flex:none; border:0; background:transparent; color:var(--dsw-alias-label-tertiary,#a3a8b0); cursor:pointer; font-size:14px; line-height:1; padding:1px 2px; }
-      .rd-transfer-bar { height:5px; margin-top:8px; border-radius:99px; background:rgba(15,23,42,.1); overflow:hidden; }
-      .rd-transfer-fill { height:100%; width:0; border-radius:99px; background:#2f7ddd; transition:width .18s linear; }
-      .rd-transfer-row.done .rd-transfer-fill { background:#2ea043; }
-      .rd-transfer-row.error .rd-transfer-fill { background:#dc2626; }
+      .rd-transfer-panel { position:fixed; right:18px; bottom:118px; z-index:9999; width:min(356px,calc(100vw - 36px)); display:flex; flex-direction:column; gap:6px; pointer-events:none; }
+      .rd-transfer-row { pointer-events:auto; display:flex; flex-direction:column; gap:6px; padding:7px 10px; border:1px solid var(--dsw-alias-border-l1,#e8e8ec); border-radius:9px; background:var(--dsw-alias-bg-layer-1,#fff); color:var(--dsw-alias-label-primary,#1f2329); box-shadow:0 8px 24px rgba(16,24,40,.16); }
+      .rd-transfer-row.terminal { flex-direction:row; align-items:center; gap:7px; padding:6px 10px; }
+      .rd-transfer-line { display:flex; align-items:center; gap:7px; min-width:0; }
+      .rd-transfer-glyph { flex:none; width:16px; text-align:center; color:#4f8cff; font-size:12px; line-height:1; }
+      .rd-transfer-glyph.ok { color:#3fbf6b; }
+      .rd-transfer-glyph.bad { color:#ff6b5c; }
+      .rd-transfer-glyph.muted { color:#8f959e; }
+      .rd-transfer-name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; }
+      .rd-transfer-status { flex:none; max-width:210px; overflow:hidden; text-overflow:ellipsis; color:var(--dsw-alias-label-secondary,#8f959e); font-size:10px; white-space:nowrap; }
+      .rd-transfer-cancel { flex:none; border:0; background:transparent; color:var(--dsw-alias-label-secondary,#8f959e); cursor:pointer; font-size:10px; padding:0 2px; }
+      .rd-transfer-cancel:hover { color:var(--dsw-alias-label-primary,#1f2329); }
+      .rd-transfer-bar { height:3px; border-radius:99px; background:rgba(15,23,42,.1); overflow:hidden; }
+      .rd-transfer-fill { height:100%; width:0; border-radius:99px; background:#4f8cff; transition:width .18s linear; }
+      .rd-transfer-row.done .rd-transfer-fill { background:#3fbf6b; }
+      .rd-transfer-row.error .rd-transfer-fill { background:#ff6b5c; }
       .rd-transfer-row.cancelled .rd-transfer-fill { background:#8f959e; }
       .rd-transfer-row.indeterminate .rd-transfer-fill { width:35%; animation:rd-transfer-slide 1.3s ease-in-out infinite; }
-      .rd-transfer-foot { display:flex; align-items:center; gap:8px; margin-top:5px; color:var(--dsw-alias-label-secondary,#8f959e); font-size:10px; }
-      .rd-transfer-foot .sp { margin-left:auto; white-space:nowrap; }
-      .rd-transfer-btn { border:0; background:transparent; color:#2f7ddd; cursor:pointer; font-size:10px; padding:1px 3px; }
-      .rd-transfer-btn.danger { color:#b42318; }
       @keyframes rd-transfer-slide { 0% { transform:translateX(-110%) } 50% { transform:translateX(190%) } 100% { transform:translateX(-110%) } }
-      [data-rd-theme="dark"] .rd-transfer-row { background:#1b1e24; border-color:rgba(255,255,255,.12); color:#e6e8eb; }
-      [data-rd-theme="dark"] .rd-transfer-bar { background:rgba(255,255,255,.14); }
+      [data-rd-theme="dark"] .rd-transfer-row { background:#1f2126; border-color:rgba(255,255,255,.11); color:#eef1f5; }
+      [data-rd-theme="dark"] .rd-transfer-bar { background:rgba(255,255,255,.12); }
+      [data-rd-theme="dark"] .rd-transfer-cancel { color:#9aa1ab; }
+      [data-rd-theme="dark"] .rd-transfer-cancel:hover { color:#eef1f5; }
       .rd-cpane > .rd-status { margin: 8px 0 10px; }
       [data-rd-theme="dark"] .rd-status { background: rgba(255,255,255,.05); }
       [data-rd-theme="dark"] .rd-status.bad { background: rgba(255,107,92,.12); color: #ff8f82; }
