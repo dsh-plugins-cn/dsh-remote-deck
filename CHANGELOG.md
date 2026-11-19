@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - v1.1.0: full xterm.js terminal, i18n (zh/en), explicit debug switch, virtualized large folders.
 
+## [1.6.8] - 2026-11-19
+
+### Fixed
+
+- Native Save-As success, failure and `requested` results now always end in a visible
+  three-second chip; previously a native result that did not report transfer progress
+  could finish while the job was still hidden.
+- The capsule chooses the largest visible composer textbox instead of the first
+  `[role="textbox"]` in the document, so hidden inputs in other panels cannot push it
+  off-screen.
+
 ## [1.6.7] - 2026-11-19
 
 ### Changed

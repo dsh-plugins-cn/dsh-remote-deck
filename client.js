@@ -621,8 +621,12 @@ window.__ModuleLoader__.load({
               } else if (result && result.status === 'cancelled') {
                 finishDownload(job, 'cancelled')
               } else if (lastTransfer && lastTransfer.state === 'done') {
+                job.visible = true
                 finishDownload(job, 'done', { path: safeName, total: job.total || job.loaded })
               } else {
+                // The native bridge may report a browser-requested save rather
+                // than a completed one; it still deserves a brief terminal chip.
+                job.visible = true
                 finishDownload(job, 'requested')
               }
               return
@@ -702,6 +706,10 @@ window.__ModuleLoader__.load({
             finishDownload(job, 'cancelled')
           } else {
             const message = error instanceof Error ? error.message : String(error)
+            // If the native Save-As had already been invoked, a failure after
+            // that point should still produce a short error chip. A cancelled
+            // picker follows the AbortError/cancelled branch above.
+            if (job.state === 'native' || job.transferId !== null) job.visible = true
             finishDownload(job, 'error', { error: message })
           }
         }
@@ -784,10 +792,14 @@ window.__ModuleLoader__.load({
       // at a hard-coded offset that can cover it at short window heights.
       let bottom = 118
       try {
-        const textbox = document.querySelector('[role="textbox"]')
-        if (textbox !== null) {
-          const rect = textbox.getBoundingClientRect()
-          if (rect.width > 0 && rect.height > 0) bottom = Math.max(16, Math.round(window.innerHeight - rect.top + 8))
+        // Prefer the largest visible textbox near the bottom. Hidden inputs in
+        // other panels must not push the capsule off-screen.
+        const candidates = [...document.querySelectorAll('[role="textbox"]')]
+          .map((element) => element.getBoundingClientRect())
+          .filter((rect) => rect.width >= 160 && rect.height > 0 && rect.top > window.innerHeight * 0.25 && rect.bottom <= window.innerHeight + 2)
+          .sort((a, b) => (b.width * b.height) - (a.width * a.height))
+        if (candidates.length > 0) {
+          bottom = Math.max(16, Math.min(window.innerHeight - 60, Math.round(window.innerHeight - candidates[0].top + 8)))
         }
       } catch {
         /* use the fallback */
